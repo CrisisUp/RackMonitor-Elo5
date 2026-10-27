@@ -82,6 +82,9 @@
  * 8. NVS é persistência PASSIVA.
  */
 
+// =========================================================================
+// INCLUDES
+// =========================================================================
 #include <Wire.h>
 #include <SPI.h>
 #include <MFRC522.h>
@@ -97,73 +100,14 @@
 #include <time.h>
 #include <ArduinoOTA.h>
 
+#include "config.h"
+#include "state.h"
+#include "ring_buffer.h"
+#include "json_builder.h"
+
 // =========================================================================
-// CONFIGURAÇÃO GLOBAL
+// VARIÁVEIS DE ESTADO (mudam durante a execução)
 // =========================================================================
-
-namespace Pins
-{
-    constexpr uint8_t RFID_SS = 5;
-    constexpr uint8_t RFID_RST = 4;
-    constexpr uint8_t RFID_SCK = 18;
-    constexpr uint8_t RFID_MISO = 19;
-    constexpr uint8_t RFID_MOSI = 23;
-
-    constexpr uint8_t PIR = 27;
-    constexpr uint8_t TRIG = 17;
-    constexpr uint8_t ECHO = 16;
-    constexpr uint8_t LDR_AO = 34;
-
-    constexpr uint8_t BOTAO = 14;
-    constexpr uint8_t SWITCH = 25;
-
-    constexpr uint8_t BUZZER_E = 15;
-    constexpr uint8_t BUZZER_D = 2;
-
-    constexpr uint8_t LED_R = 32;
-    constexpr uint8_t LED_G = 33;
-    constexpr uint8_t LED_B = 0;
-}
-
-// [v7.0] Botão de pânico — GPIO 26 (livre, sem strapping, pull-up interno)
-constexpr uint8_t BOTAO_PANICO = 26;
-
-constexpr uint32_t PWM_FREQ = 5000;
-constexpr uint8_t PWM_RESOLUTION = 8;
-constexpr uint8_t LARGURA_TELA = 128;
-constexpr uint8_t ALTURA_TELA = 64;
-constexpr uint8_t ENDERECO_OLED = 0x3C;
-
-// Filtros
-constexpr int LDR_LIMIAR_ACENDE = 2200;
-constexpr int LDR_LIMIAR_APAGA = 1800;
-constexpr unsigned long DEBOUNCE_LDR_MS = 800;
-
-constexpr int US_AMOSTRAS = 5;
-constexpr float US_DIST_MAX_VALIDA = 400.0f;
-
-constexpr unsigned long DEBOUNCE_ESTADO_MS = 300;
-
-constexpr unsigned long DEBOUNCE_BOTAO_MS = 250;
-constexpr unsigned long JANELA_CLIQUE_DUPLO_MS = 400;
-constexpr unsigned long DURACAO_CLIQUE_LONGO_MS = 3000;
-
-constexpr unsigned long DEBOUNCE_PORTA_MS = 200;
-
-constexpr unsigned long DURACAO_AVISO_BLOQUEIO_MS = 4000;
-
-// Limites ambientais
-constexpr float TEMP_ALERTA_C_DEFAULT = 30.0f;
-constexpr float TEMP_CRITICO_C_DEFAULT = 35.0f;
-constexpr float UMID_ALERTA_PCT_DEFAULT = 65.0f;
-constexpr float UMID_CRITICO_PCT_DEFAULT = 80.0f;
-
-constexpr float TEMP_HISTERESE = 2.0f;
-constexpr float UMID_HISTERESE = 5.0f;
-
-constexpr float TAXA_ALERTA_C_POR_MIN = 1.0f;
-constexpr unsigned long INTERVALO_AMOSTRA_TAXA_MS = 60000UL;
-
 float limiarTempAlerta = TEMP_ALERTA_C_DEFAULT;
 float limiarTempCritico = TEMP_CRITICO_C_DEFAULT;
 float limiarUmidAlerta = UMID_ALERTA_PCT_DEFAULT;
@@ -178,27 +122,13 @@ bool taxaTempAlerta = false;
 // Watchdog do DHT22
 unsigned long _ultimaLeituraValidaDHT = 0;
 bool _sensorDHTPerdido = false;
-constexpr unsigned long TIMEOUT_DHT_MS = 10000UL;
+constexpr unsigned long TIMEOUT_DHT_MS = 10000UL; // Mantido aqui, se não estiver no config.h
 
 // Cache das últimas leituras válidas do DHT
 float _ultimaTempValida = -999.0f;
 float _ultimaUmidValida = -999.0f;
 
-enum EstadoAmbiental
-{
-    AMB_OK,
-    AMB_ALERTA,
-    AMB_CRITICO
-};
 EstadoAmbiental estadoAmbiental = AMB_OK;
-
-// [v7.1] Fonte de tempo atual
-enum FonteTempo
-{
-    FONTE_NTP,
-    FONTE_RTC,
-    FONTE_MILLIS
-};
 FonteTempo fonteTempoAtual = FONTE_MILLIS;
 
 #define ALARME_SONORO_AMBIENTAL 0
@@ -211,125 +141,7 @@ bool contadoresDirty = false;
 const String CARTAO_AUTORIZADO_1 = "01020304";
 const String CARTAO_AUTORIZADO_2 = "55667788";
 
-constexpr unsigned long WARMUP_LDR_MS = 1500;
-constexpr unsigned long WARMUP_PIR_MS = 1500;
-constexpr unsigned long WARMUP_US_MS = 1500;
-
 std::vector<String> cartoesAutorizados;
-
-// =========================================================================
-// CONFIGURAÇÃO DE REDE (Wi-Fi + MQTT)
-// =========================================================================
-const char *WIFI_SSID = "Wokwi-GUEST";
-const char *WIFI_PASSWORD = "";
-const char *MQTT_BROKER = "broker.emqx.io";
-const int MQTT_PORT = 1883;
-
-const char *MQTT_TOPIC_STATUS = "rack_monitor_ABCD1234/status";
-const char *MQTT_TOPIC_LWT = "rack_monitor_ABCD1234/status/lwt";
-const char *MQTT_TOPIC_CMD = "rack_monitor_ABCD1234/comando";
-const char *MQTT_TOPIC_LOGS = "rack_monitor_ABCD1234/logs";
-const char *MQTT_TOPIC_HB = "rack_monitor_ABCD1234/heartbeat";
-
-// [v7.0] Tópicos dedicados de ambiente
-const char *MQTT_TOPIC_AMBIENTE = "rack_monitor_ABCD1234/ambiente";
-const char *MQTT_TOPIC_CMD_AMBIENTE = "rack_monitor_ABCD1234/comando/ambiente";
-
-const unsigned long MQTT_RETRY_MS = 5000;
-
-const char *MQTT_RESET_TOKEN = "rack2026";
-
-// =========================================================================
-// [v7.1] CONFIGURAÇÃO NTP
-// =========================================================================
-const char *NTP_SERVER_1 = "pool.ntp.org";
-const char *NTP_SERVER_2 = "time.google.com";
-const char *NTP_SERVER_3 = "time.cloudflare.com";
-
-const long NTP_GMT_OFFSET_SEC = -3 * 3600;
-const int NTP_DAYLIGHT_OFFSET_SEC = 0;
-
-const unsigned long NTP_SYNC_INTERVAL_MS = 6UL * 60UL * 60UL * 1000UL;
-const unsigned long NTP_SYNC_TIMEOUT_MS = 15000UL;
-
-// =========================================================================
-// [v7.2] CONFIGURAÇÃO OTA
-// =========================================================================
-const char *OTA_HOSTNAME = "rack-ABCD1234";
-const char *OTA_PASSWORD = "rack@2026#ota";
-const uint16_t OTA_PORT = 3232;
-
-// =========================================================================
-// [v7.3] CONFIGURAÇÃO RING BUFFER
-// =========================================================================
-// 100 eventos * (4+1+64) bytes ≈ 6.9KB na heap (alocado uma vez no boot).
-// Sobra ~290KB de heap livre no ESP32 — folga confortável.
-constexpr uint16_t HIST_TAMANHO = 100;
-constexpr uint8_t HIST_MSG_MAX = 64; // tamanho máximo de cada mensagem
-
-enum NivelLog : uint8_t
-{
-    NIVEL_INFO = 0,
-    NIVEL_WARN = 1,
-    NIVEL_ALERT = 2,
-    NIVEL_CRIT = 3
-};
-
-// =========================================================================
-// ENUMS E STRUCTS
-// =========================================================================
-
-enum ModoVigilante
-{
-    ARMADO,
-    DESARMADO
-};
-
-enum EstadoSistema
-{
-    SEGURO,
-    AVISO_SALA,
-    APROXIMACAO_RACK,
-    EMERGENCIA_RACK,
-    INVASAO_SALA,
-    ACESSO_RFID
-};
-
-enum EventoBotao
-{
-    BOTAO_NENHUM,
-    BOTAO_CURTO,
-    BOTAO_DUPLO,
-    BOTAO_LONGO
-};
-
-struct EventoRFID
-{
-    bool novo = false;
-    bool valido = false;
-    String uid = "";
-};
-
-struct LeiturasSensores
-{
-    bool movimento = false;
-    bool luzAcesa = false;
-    bool portaAberta = false;
-    float distancia = 999.0f;
-};
-
-// =========================================================================
-// [v7.3] STRUCT DO RING BUFFER
-// =========================================================================
-// Sem String, sem ponteiro, sem alocação dinâmica. Copiável por memcpy.
-// =========================================================================
-
-struct EventoLog
-{
-    uint32_t ms;   // millis() no momento do evento
-    uint8_t nivel; // NivelLog
-    char msg[HIST_MSG_MAX];
-};
 
 // =========================================================================
 // PERIFÉRICOS
@@ -350,186 +162,6 @@ Preferences prefs;
 // de pânico pode chamar registrarEvento() de dentro da ISR sem corromper
 // o índice circular.
 // =========================================================================
-
-class RingBufferLog
-{
-public:
-    void begin()
-    {
-        _head = 0;
-        _count = 0;
-        // Não precisa zerar o array — o _count controla o que é válido
-    }
-
-    /**
-     * @brief Insere um evento no buffer. Circular: se cheio, sobrescreve
-     *        o mais antigo.
-     * @note  Chamar de dentro de ISR é seguro (noInterrupts é reentrante no
-     *        ESP32 — desabilita temporariamente e restaura).
-     */
-    void push(uint8_t nivel, const char *msg)
-    {
-        noInterrupts();
-        EventoLog &slot = _buffer[_head];
-        slot.ms = millis();
-        slot.nivel = nivel;
-        strncpy(slot.msg, msg, HIST_MSG_MAX - 1);
-        slot.msg[HIST_MSG_MAX - 1] = '\0'; // garante terminação
-
-        _head = (_head + 1) % HIST_TAMANHO;
-        if (_count < HIST_TAMANHO)
-            _count++;
-        interrupts();
-    }
-
-    /**
-     * @brief Despeja os eventos em ordem cronológica (mais antigo -> mais novo).
-     */
-    void dumpSerial() const
-    {
-        Serial.println(F("----------- HISTORICO DE EVENTOS -----------"));
-        Serial.print(F("  Total no buffer: "));
-        Serial.println(_count);
-        Serial.print(F("  Capacidade:      "));
-        Serial.println(HIST_TAMANHO);
-        Serial.println(F("---------------------------------------------"));
-
-        if (_count == 0)
-        {
-            Serial.println(F("  (vazio)"));
-            Serial.println(F("---------------------------------------------"));
-            return;
-        }
-
-        // O mais antigo está em (_head - _count + HIST_TAMANHO) % HIST_TAMANHO
-        uint16_t inicio = (_head + HIST_TAMANHO - _count) % HIST_TAMANHO;
-        for (uint16_t i = 0; i < _count; i++)
-        {
-            uint16_t idx = (inicio + i) % HIST_TAMANHO;
-            const EventoLog &e = _buffer[idx];
-
-            char tempo[12];
-            uint32_t s = e.ms / 1000;
-            uint32_t m = s / 60;
-            uint32_t h = m / 60;
-            s %= 60;
-            m %= 60;
-            snprintf(tempo, sizeof(tempo), "%02lu:%02lu:%02lu",
-                     (unsigned long)h, (unsigned long)m, (unsigned long)s);
-
-            Serial.print("[");
-            Serial.print(tempo);
-            Serial.print("] [");
-            Serial.print(_nomeNivel(e.nivel));
-            Serial.print("] ");
-            Serial.println(e.msg);
-        }
-        Serial.println(F("---------------------------------------------"));
-    }
-
-    /**
-     * @brief Despeja os eventos em formato JSON (uma linha por evento).
-     *        Útil para colar em ferramentas de análise.
-     */
-    void dumpJSON() const
-    {
-        Serial.println(F("{\"eventos\":["));
-        if (_count == 0)
-        {
-            Serial.println(F("]}"));
-            return;
-        }
-
-        uint16_t inicio = (_head + HIST_TAMANHO - _count) % HIST_TAMANHO;
-        for (uint16_t i = 0; i < _count; i++)
-        {
-            uint16_t idx = (inicio + i) % HIST_TAMANHO;
-            const EventoLog &e = _buffer[idx];
-
-            Serial.print(F("  {\"ms\":"));
-            Serial.print(e.ms);
-            Serial.print(F(",\"nivel\":\""));
-            Serial.print(_nomeNivel(e.nivel));
-            Serial.print(F("\",\"msg\":\""));
-            _escapeJson(e.msg);
-            Serial.print(F("\"}"));
-            if (i < _count - 1)
-                Serial.print(',');
-            Serial.println();
-        }
-        Serial.println(F("]}"));
-    }
-
-    void clear()
-    {
-        noInterrupts();
-        _head = 0;
-        _count = 0;
-        interrupts();
-        Serial.println(F("[INFO] Historico limpo."));
-    }
-
-    uint16_t tamanho() const { return _count; }
-
-private:
-    EventoLog _buffer[HIST_TAMANHO];
-    volatile uint16_t _head = 0;
-    volatile uint16_t _count = 0;
-
-    static const char *_nomeNivel(uint8_t n)
-    {
-        switch (n)
-        {
-        case NIVEL_INFO:
-            return "INFO";
-        case NIVEL_WARN:
-            return "WARN";
-        case NIVEL_ALERT:
-            return "ALERT";
-        case NIVEL_CRIT:
-            return "CRIT";
-        default:
-            return "????";
-        }
-    }
-
-    static void _escapeJson(const char *s)
-    {
-        for (size_t i = 0; s[i] != '\0'; i++)
-        {
-            char c = s[i];
-            switch (c)
-            {
-            case '"':
-                Serial.print(F("\\\""));
-                break;
-            case '\\':
-                Serial.print(F("\\\\"));
-                break;
-            case '\n':
-                Serial.print(F("\\n"));
-                break;
-            case '\r':
-                Serial.print(F("\\r"));
-                break;
-            case '\t':
-                Serial.print(F("\\t"));
-                break;
-            default:
-                if ((uint8_t)c < 0x20)
-                {
-                    char buf[7];
-                    snprintf(buf, sizeof(buf), "\\u%04x", (uint8_t)c);
-                    Serial.print(buf);
-                }
-                else
-                {
-                    Serial.print(c);
-                }
-            }
-        }
-    }
-};
 
 RingBufferLog logBuffer;
 
@@ -1060,8 +692,8 @@ class BotaoPanico
 public:
     void begin()
     {
-        pinMode(BOTAO_PANICO, INPUT_PULLUP);
-        attachInterrupt(digitalPinToInterrupt(BOTAO_PANICO), _isr, FALLING);
+        pinMode(Pins::BOTAO_PANICO, INPUT_PULLUP);
+        attachInterrupt(digitalPinToInterrupt(Pins::BOTAO_PANICO), _isr, FALLING);
         _flagISR = false;
         _tempoUltimoDisparo = 0;
     }
@@ -2572,7 +2204,7 @@ void _verificarAmbiente(float temp, float umid)
     if (temp == -999.0f || umid == -999.0f)
     {
         if (_ultimaLeituraValidaDHT > 0 &&
-            (millis() - _ultimaLeituraValidaDHT) > TIMEOUT_DHT_MS)
+            (millis() - _ultimaLeituraValidaDHT) > 10000UL)
         {
             if (!_sensorDHTPerdido)
             {
