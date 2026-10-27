@@ -27,12 +27,14 @@ enum EstadoAmbiental
     AMB_CRITICO
 };
 
+// APENAS UMA DEFINIÇÃO DO FONTETEMPO AQUI!
 enum FonteTempo
 {
     FONTE_NTP,
     FONTE_RTC,
     FONTE_MILLIS
 };
+extern FonteTempo fonteTempoAtual;
 
 enum EventoBotao
 {
