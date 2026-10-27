@@ -545,3 +545,211 @@ Este projeto foi construído sobre os ombros de gigantes. Agradecimentos às seg
 - [The Twelve-Factor App](https://12factor.net/) — Princípios de design de software
 
 Este é o `README.md` completo, atualizado para a **v7.4**. Você pode copiar o bloco de código acima e substituir o conteúdo do seu arquivo `README.md` atual. Todas as tabelas, badges, negritos e ícones estão preservados no formato Markdown.
+
+Perfeito! Vamos fechar o dia com um plano claro e detalhado do que faremos amanhã. Guarde esta mensagem (ou copie para um arquivo ROADMAP.md no seu projeto) para consultar amanhã.
+
+🗺️ Roadmap de Refatoração — Fases 3, 4 e 5
+Data de início: 28/10/2026 (amanhã)
+Estado atual: Fases 1 e 2 concluídas, 12 testes nativos passando, ESP32 compilando com sucesso.
+
+🎯 Objetivo final
+Reduzir o main.cpp de ~2.500 linhas para ~150 linhas, contendo apenas:
+
+Includes
+
+Variáveis de estado
+
+Instâncias globais
+
+setup() e loop()
+
+📅 Fase 3 — Extrair os Módulos de Hardware (amanhã de manhã)
+Duração estimada: 2–3 horas
+Risco: Médio (muitas classes, mas isoladas)
+
+O que faremos
+Mover cada classe de hardware para um arquivo .h e .cpp na pasta lib/. O PlatformIO compila a pasta lib/ automaticamente, então o linker vai encontrar tudo.
+
+Estrutura final da lib/
+text
+lib/
+├── ldr/
+│   ├── ldr.h
+│   └── ldr.cpp
+├── ultrassonico/
+│   ├── ultrassonico.h
+│   └── ultrassonico.cpp
+├── porta/
+│   ├── porta.h
+│   └── porta.cpp
+├── pir/
+│   ├── pir.h
+│   └── pir.cpp
+├── botao/
+│   ├── botao.h
+│   └── botao.cpp
+├── botao_panico/
+│   ├── botao_panico.h
+│   └── botao_panico.cpp
+├── leitor_rfid/
+│   ├── leitor_rfid.h
+│   └── leitor_rfid.cpp
+├── led_rgb/
+│   ├── led_rgb.h
+│   └── led_rgb.cpp
+├── audio/
+│   ├── audio.h
+│   └── audio.cpp
+├── display_oled/
+│   ├── display_oled.h
+│   └── display_oled.cpp
+└── sensor_dht/
+    ├── sensor_dht.h
+    └── sensor_dht.cpp
+Ordem de execução (menor risco primeiro)
+LDR (independente, fácil)
+
+PIR (idem)
+
+Porta (idem)
+
+Ultrassonico (idem)
+
+SensorDHT (idem)
+
+LedRGB (depende de Pins e PWM_FREQ)
+
+Audio (depende de EstadoSistema e EstadoAmbiental)
+
+DisplayOLED (depende de LeiturasSensores, EstadoSistema, relogio, etc.)
+
+Botao (independente)
+
+BotaoPanico (já isolado, mas o IRAM_ATTR precisa de cuidado)
+
+LeitorRFID (depende de MFRC522 e EventoRFID)
+
+Estratégia para cada classe
+Para cada classe, faremos:
+
+Criar lib/<classe>/<classe>.h (declaração da classe).
+
+Criar lib/<classe>/<classe>.cpp (implementação).
+
+No main.cpp: remover a classe, adicionar #include "<classe>.h".
+
+Manter a instância global no main.cpp (ex: LDR ldr;).
+
+Rodar pio run -e esp32dev (build).
+
+Rodar pio test -e native (regressão).
+
+Se ambos passarem, seguir para a próxima classe.
+
+Critério de sucesso da Fase 3
+main.cpp sem nenhuma das classes de hardware.
+
+Build do ESP32 passando.
+
+12 testes nativos passando.
+
+📅 Fase 4 — Extrair a Lógica (amanhã de tarde)
+Duração estimada: 2–3 horas
+Risco: Alto (o Alarme é o coração do sistema)
+
+O que faremos
+Mover as classes de lógica (que não dependem diretamente de hardware) para a lib/.
+
+Estrutura final
+text
+lib/
+├── relogio/
+│   ├── relogio.h
+│   └── relogio.cpp
+├── alarme/
+│   ├── alarme.h
+│   └── alarme.cpp
+├── notificador_mqtt/
+│   ├── notificador_mqtt.h
+│   └── notificador_mqtt.cpp
+└── dashboard_web/
+    ├── dashboard_web.h
+    └── dashboard_web.cpp
+Ordem de execução
+Relogio (depende de RTC_DS3231 e FonteTempo, já testado).
+
+Alarme (depende de EstadoSistema, ModoVigilante, LeiturasSensores, etc. — o núcleo da máquina de estados).
+
+NotificadorMQTT (depende de PubSubClient, montarJSONStatus()).
+
+DashboardWeb (depende de WebServer, montarJSONStatus(), logBuffer).
+
+Estratégia especial para o Alarme
+O Alarme usa prefs (NVS) e audio (instâncias globais). Para evitar dependência circular:
+
+Manter prefs e audio como instâncias globais no main.cpp.
+
+No alarme.h, usar extern para referenciá-los:
+
+cpp
+extern Preferences prefs;
+extern Audio audio;
+Critério de sucesso da Fase 4
+main.cpp contém apenas:
+
+Includes
+
+Variáveis de estado (floats, bools)
+
+Instâncias globais (displays, sensores, etc.)
+
+setup() e loop()
+
+Build do ESP32 passando.
+
+12 testes nativos passando.
+
+Bônus: rodar o sistema no Wokwi novamente para confirmar que tudo funciona igual.
+
+📅 Fase 5 — Testes E2E e CI/CD (amanhã à noite, se der tempo)
+Duração estimada: 1–2 horas
+Risco: Baixo
+
+O que faremos
+GitHub Actions: Criar .github/workflows/test.yml para rodar os 12 testes nativos a cada git push.
+
+Testes E2E com Python: Criar tests/e2e/test_mqtt.py para validar o sistema completo via MQTT (sem hardware, usando o broker público).
+
+Atualizar o README.md com a nova estrutura modular.
+
+🚦 Como retomar amanhã
+Quando você abrir o VS Code amanhã:
+
+Verifique se está tudo commitado:
+
+bash
+git status
+Deve mostrar working tree clean.
+
+Verifique se ainda compila e testa:
+
+bash
+pio test -e native
+pio run -e esp32dev
+Comece pela Fase 3, classe LDR. Eu te mando o código do lib/ldr/ldr.h e lib/ldr/ldr.cpp, e você aplica.
+
+Após cada classe, rode os dois comandos e me diga o resultado. Se algo quebrar, a gente isola o problema antes de seguir.
+
+📝 Resumo do estado atual
+Item	Status
+Fase 1: Ring Buffer modularizado	✅ Concluída
+Fase 2: Config/State extraídos	✅ Concluída
+Fase 3: Hardware em lib/	⏳ Amanhã
+Fase 4: Lógica em lib/	⏳ Amanhã
+Fase 5: CI/CD + E2E	⏳ Amanhã (bônus)
+Build ESP32	✅ [SUCCESS]
+Testes nativos (12/12)	✅ Passando
+Git commit + push	🔄 Em andamento
+Bom descanso! Amanhã começamos a Fase 3 pela classe LDR, que é a mais simples. Cada classe é uma vitória pequena, e ao final do dia o main.cpp vai estar enxuto e profissional.
+
+Até amanhã! 🚀
