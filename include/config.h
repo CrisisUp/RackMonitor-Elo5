@@ -70,28 +70,28 @@ constexpr unsigned long INTERVALO_AMOSTRA_TAXA_MS = 60000UL;
 // =========================================================================
 // CONFIGURAÇÃO DE REDE E PROTOCOLOS
 // =========================================================================
-const char *WIFI_SSID = "Wokwi-GUEST";
-const char *WIFI_PASSWORD = "";
-const char *MQTT_BROKER = "broker.emqx.io";
+const char *const WIFI_SSID = "Wokwi-GUEST";
+const char *const WIFI_PASSWORD = "";
+const char *const MQTT_BROKER = "broker.emqx.io";
 const int MQTT_PORT = 1883;
 
-const char *MQTT_TOPIC_STATUS = "rack_monitor_ABCD1234/status";
-const char *MQTT_TOPIC_LWT = "rack_monitor_ABCD1234/status/lwt";
-const char *MQTT_TOPIC_CMD = "rack_monitor_ABCD1234/comando";
-const char *MQTT_TOPIC_LOGS = "rack_monitor_ABCD1234/logs";
-const char *MQTT_TOPIC_HB = "rack_monitor_ABCD1234/heartbeat";
-const char *MQTT_TOPIC_AMBIENTE = "rack_monitor_ABCD1234/ambiente";
-const char *MQTT_TOPIC_CMD_AMBIENTE = "rack_monitor_ABCD1234/comando/ambiente";
+const char *const MQTT_TOPIC_STATUS = "rack_monitor_ABCD1234/status";
+const char *const MQTT_TOPIC_LWT = "rack_monitor_ABCD1234/status/lwt";
+const char *const MQTT_TOPIC_CMD = "rack_monitor_ABCD1234/comando";
+const char *const MQTT_TOPIC_LOGS = "rack_monitor_ABCD1234/logs";
+const char *const MQTT_TOPIC_HB = "rack_monitor_ABCD1234/heartbeat";
+const char *const MQTT_TOPIC_AMBIENTE = "rack_monitor_ABCD1234/ambiente";
+const char *const MQTT_TOPIC_CMD_AMBIENTE = "rack_monitor_ABCD1234/comando/ambiente";
 
 const unsigned long MQTT_RETRY_MS = 5000;
-const char *MQTT_RESET_TOKEN = "rack2026";
+const char *const MQTT_RESET_TOKEN = "rack2026";
 
 // =========================================================================
 // NTP
 // =========================================================================
-const char *NTP_SERVER_1 = "pool.ntp.org";
-const char *NTP_SERVER_2 = "time.google.com";
-const char *NTP_SERVER_3 = "time.cloudflare.com";
+const char *const NTP_SERVER_1 = "pool.ntp.org";
+const char *const NTP_SERVER_2 = "time.google.com";
+const char *const NTP_SERVER_3 = "time.cloudflare.com";
 const long NTP_GMT_OFFSET_SEC = -3 * 3600;
 const int NTP_DAYLIGHT_OFFSET_SEC = 0;
 const unsigned long NTP_SYNC_INTERVAL_MS = 6UL * 60UL * 60UL * 1000UL;
@@ -100,8 +100,8 @@ const unsigned long NTP_SYNC_TIMEOUT_MS = 15000UL;
 // =========================================================================
 // OTA
 // =========================================================================
-const char *OTA_HOSTNAME = "rack-ABCD1234";
-const char *OTA_PASSWORD = "rack@2026#ota";
+const char *const OTA_HOSTNAME = "rack-ABCD1234";
+const char *const OTA_PASSWORD = "rack@2026#ota";
 const uint16_t OTA_PORT = 3232;
 
 // =========================================================================
