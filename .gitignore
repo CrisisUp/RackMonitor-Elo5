@@ -1,0 +1,18 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# VS Code
+.vscode/
+
+# macOS
+.DS_Store
+
+# Logs e temporários
+*.log
+*.tmp
+
+# (Opcional) Se você for colocar senhas reais no main.cpp,
+# remova o comentário da linha abaixo para não vazar pro GitHub
+# src/main.cpp
