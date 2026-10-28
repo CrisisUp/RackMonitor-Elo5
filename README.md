@@ -3,13 +3,15 @@
 [![ESP32](https://img.shields.io/badge/ESP32-DevKit-blue?logo=espressif&logoColor=white)](https://www.espressif.com/)
 [![MQTT](https://img.shields.io/badge/MQTT-broker.emqx.io-purple?logo=eclipse-mosquitto&logoColor=white)](https://mqtt.org/)
 [![PlatformIO](https://img.shields.io/badge/PlatformIO-Ready-orange?logo=platformio&logoColor=white)](https://platformio.org/)
+[![Tests](https://img.shields.io/badge/Tests-12%2F12-brightgreen)](./test/)
 [![Doxygen](https://img.shields.io/badge/Docs-Doxygen-blue?logo=readthedocs&logoColor=white)](./docs/html/index.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-7.4-brightgreen)](./CHANGELOG.md)
 
 Sistema IoT de monitoramento de rack de servidores com ESP32, sensores locais,
-dashboard web em tempo real, controle remoto via MQTT e Dashboard Local de
-contingência (SSE).
+dashboard web em tempo real, controle remoto via MQTT, OTA (ArduinoOTA) e
+Dashboard Local de contingência (SSE). **Totalmente modularizado e com 12 testes
+nativos automatizados.**
 
 Versão atual: **firmware v7.4**
 Ambiente de desenvolvimento: **PlatformIO (VS Code) + Wokwi (protótipo) + MQTTX**
@@ -26,15 +28,12 @@ A documentação detalhada de todas as classes, métodos, structs e variáveis f
 
 👉 **[Clique aqui para acessar a documentação (HTML)](./docs/html/index.html)**
 
-*Ou, se preferir a versão online hospedada no GitHub Pages:*
-👉 **[Acessar versão online](https://github.com/CrisisUp/Elo5-Monitor-do-Rack-do-Servidor)**
-
 A documentação cobre:
 
 - **Classes:** `Alarme`, `Audio`, `DisplayOLED`, `NotificadorMQTT`, `DashboardWeb`, `RingBufferLog`, `BotaoPanico`, etc.
 - **Structs:** `LeiturasSensores`, `EventoRFID`, `EventoLog`
 - **Enums:** `EstadoSistema`, `ModoVigilante`, `EstadoAmbiental`, `NivelLog`, `FonteTempo`
-- **Funções:** `_verificarAmbiente()`, `executarModoTeste()`, `montarJSONStatus()`, etc.
+- **Funções:** `verificarAmbiente()`, `executarModoTeste()`, `montarJSONStatus()`, etc.
 
 ## 📦 Arquitetura Final
 
@@ -53,288 +52,210 @@ A documentação cobre:
      └─ NVS (Persistência)                               │
 ```
 
-⚠️ Limitação do Wokwi gratuito: o ESP32 simulado só existe enquanto a aba
-está aberta. Ao fechar, o dispositivo "morre", o LWT dispara offline e o
-dashboard fica offline. Não há gateway privado nem simulação 24/7 no plano gratuito.
-
 ## 🧩 Componentes do Sistema
 
-### 1. Código do ESP32 (`src/main.cpp`)
+### 1. Código do ESP32 (src/main.cpp)
 
-#### Arquitetura modular com classes
+O main.cpp é um orquestrador puro. Ele apenas inicializa os módulos no
+setup() e coordena o ciclo no loop(). Toda a lógica está encapsulada em
+bibliotecas na pasta lib/.
 
-| Classe | Responsabilidade |
+### 2. Arquitetura Modular (lib/)
+
+| Biblioteca | Responsabilidade |
 | :--- | :--- |
-| **Relogio** | Timestamp via RTC DS3231 (fallback para NTP, depois millis) |
-| **LDR** | Sensor de luz com histerese e debounce |
-| **Ultrassonico** | HC-SR04 com média móvel de 5 amostras |
-| **Porta** | Switch com debounce de 200ms |
-| **PIR** | Sensor de movimento |
-| **Botao** | Multifunção (curto/duplo/longo) com debounce |
-| **BotaoPanico** | Pushbutton com ISR (resposta < 30ms) |
-| **LeitorRFID** | MFRC522 que emite eventos (não decide nada) |
-| **LedRGB** | LED de status com PWM |
-| **Audio** | Buzzers + melodias por estado |
-| **DisplayOLED** | Renderização (consome estado, não lê sensores) |
-| **Alarme** | Fonte única de verdade — máquina de estados |
-| **NotificadorMQTT** | Observador do Alarme + recebe comandos (segurança e ambiente) |
-| **DashboardWeb** | Servidor HTTP local (SSE) para contingência offline |
-| **RingBufferLog** | Buffer circular de 100 eventos em RAM (auditoria pós-incidente) |
-| **NVS (Preferences)** | Persistência de config, contadores e modo (ARMADO/DESARMADO) |
+| **`alarme`** | Máquina de estados central (única fonte de verdade). |
+| **`alarme_ambiental`** | Verificação de temperatura, umidade e taxa de subida. |
+| **`audio`** | Controle dos buzzers com prioridade sonora. |
+| **`botao`** | Botão multifunção (curto/duplo/longo) com debounce. |
+| **`botao_panico`** | Botão de pânico com ISR (resposta < 30ms). |
+| **`display_oled`** | Renderização do display OLED (SSD1306). |
+| **`ldr`** | Sensor de luz com histerese e debounce. |
+| **`led_rgb`** | LED de status RGB com PWM. |
+| **`leitor_rfid`** | Leitor MFRC522 que emite eventos. |
+| **`log_central`** | Log centralizado (Serial + MQTT + Ring Buffer). |
+| **`notificador_mqtt`** | Publicação MQTT (status, ambiente, logs, heartbeat). |
+| **`nvs`** | Persistência de config, contadores e cartões. |
+| **`ota`** | Atualização remota via ArduinoOTA. |
+| **`pir`** | Sensor de movimento. |
+| **`porta`** | Switch com debounce. |
+| **`relogio`** | Timestamp via RTC DS3231 (fallback NTP, depois millis). |
+| **`sensor_dht`** | Leitura do DHT22 (temperatura e umidade). |
+| **`serial_commands`** | Comandos Serial (SET, ARMAR, DESARMAR, HIST, etc.). |
+| **`test_mode`** | Autodiagnóstico de hardware. |
+| **`ultrassonico`** | HC-SR04 com média móvel de 5 amostras. |
 
-### Estados do sistema
+### 3. Estrutura de Pastas Completa
 
-- 🟢 **SEGURO** — tudo normal
-- 🔵 **ACESSO_RFID** — cartão acabou de passar
-- 🟡 **AVISO_SALA** — movimento na sala (não invasão!)
-- 🟡 **APROXIMACAO_RACK** — alguém perto do rack
-- 🔴 **EMERGENCIA_RACK** — porta aberta (invasão real)
-- ⚪ **INVASAO_SALA** — reservado (não usado por padrão)
+```text
+RackMonitor-Elo5/
+├── include/
+│   ├── arduino_stubs.h      # Mock do Arduino para testes nativos
+│   ├── config.h             # Pinos, tempos, rede, MQTT, OTA
+│   ├── json_builder.h       # Geração de JSON (reutilizado por MQTT e Dashboard)
+│   ├── ring_buffer.h        # Buffer circular de 100 eventos
+│   └── state.h              # Enums e structs compartilhados
+├── lib/
+│   ├── alarme/              # Máquina de estados central
+│   ├── alarme_ambiental/    # Verificação de temperatura/umidade
+│   ├── audio/               # Controle dos buzzers
+│   ├── botao/               # Botão multifunção
+│   ├── botao_panico/        # Botão de pânico com ISR
+│   ├── display_oled/        # Display OLED
+│   ├── ldr/                 # Sensor de luz
+│   ├── led_rgb/             # LED RGB
+│   ├── leitor_rfid/         # Leitor MFRC522
+│   ├── log_central/         # Log centralizado
+│   ├── notificador_mqtt/    # Publicação MQTT
+│   ├── nvs/                 # Persistência NVS
+│   ├── ota/                 # OTA (ArduinoOTA)
+│   ├── pir/                 # Sensor de movimento
+│   ├── porta/               # Switch da porta
+│   ├── relogio/             # RTC + NTP
+│   ├── sensor_dht/          # DHT22
+│   ├── serial_commands/     # Comandos Serial
+│   ├── test_mode/           # Autodiagnóstico
+│   └── ultrassonico/        # HC-SR04
+├── src/
+│   ├── main.cpp             # Orquestrador (setup + loop)
+│   └── ring_buffer.cpp      # Implementação do ring buffer
+├── test/
+│   └── test_logic/
+│       ├── test_alarme.cpp
+│       ├── test_json.cpp
+│       ├── test_logic.cpp
+│       └── test_ringbuffer.cpp
+├── platformio.ini
+├── README.md
+├── CHANGELOG.md
+├── TESTING.md
+└── Doxyfile
+```
 
-### Modos
+### 4. Testes Nativos (PlatformIO + Unity)
 
-- **ARMADO** — vigia ativo
-- **DESARMADO** — manutenção (rearme bloqueado se porta aberta)
+O projeto possui 12 testes automatizados que rodam no PC (ambiente native),
+sem necessidade de hardware. Eles cobrem:
 
-### Filtros implementados
+Alarme: 4 testes (prioridade de porta, RFID, movimento, caso normal).
 
-| Sensor | Filtro |
-| :--- | :--- |
-| LDR | histerese 1800–2200 + debounce 800 ms |
-| Ultrassônico | média móvel de 5 amostras; rejeita <2 cm e >400 cm |
-| Porta | debounce 200 ms |
-| Botão | debounce 250 ms + clique duplo <400 ms + clique longo >3000 ms |
-| Pânico (ISR) | FALLING edge, cooldown de 2s |
-| Estados | debounce de transição 300 ms |
+JSON: 2 testes (formato correto, tratamento de null e -999).
 
-### 🌡️ Alarmes ambientais (v7.4)
+Ring Buffer: 6 testes (vazio, push, conteúdo, overflow, clear, truncamento).
 
-| Faixa | Temperatura | Umidade | Ação |
-| :--- | :--- | :--- | :--- |
-| Normal | < 30 °C | < 65 % | — |
-| Alerta | ≥ 30 °C | ≥ 65 % | Log WARN + `rack/logs` |
-| Crítico | ≥ 35 °C | ≥ 80 % | Log CRIT + `rack/logs` |
-| Taxa de subida | ≥ 1 °C/min | — | Log CRIT + `rack/logs` |
+Para rodar:
 
-- **Histerese:** 2 °C (temperatura) / 5 % (umidade) para desligar o alarme.
-- **Estado consolidado** (`ambiente`: `OK` / `ALERTA` / `CRITICO`) exposto no JSON de status.
-- **Limiares configuráveis** via Serial (`SET TEMP_ALERTA`, `SET TEMP_CRIT`, `SET UMID_ALERTA`, `SET UMID_CRIT`) e via MQTT (`SET_TEMP_*`, `SET_UMID_*` no tópico de ambiente).
-- **Buzzer ambiental opcional** (`#define ALARME_SONORO_AMBIENTAL 0` por padrão) — respeita prioridade de segurança: nunca bipa durante `EMERGENCIA_RACK` ou `INVASAO_SALA`.
+```bash
+pio test -e native
+```
 
-### 📡 Comunicação MQTT (v7.4)
+Saída esperada:
 
-#### Tópicos (com prefixo configurável)
+```text
+12 test cases: 12 succeeded in 00:00:01.058
+```
 
-O prefixo `rack_monitor_ABCD1234` é **único do seu projeto**. Troque por algo seu
-no firmware **e** no dashboard. Isso **não é segurança** — só reduz ruído de
-curiosos no broker público.
+### 5. Compilação e Upload
+
+```bash
+# Compilar (sem hardware)
+pio run -e esp32dev
+
+# Upload para o ESP32
+pio run -e esp32dev -t upload
+
+# Monitor Serial
+pio device monitor
+```
+
+### 6. Bibliotecas Necessárias (platformio.ini)
+
+```ini
+lib_deps = 
+    miguelbalboa/MFRC522@^1.4.11
+    adafruit/Adafruit GFX Library@^1.11.11
+    adafruit/Adafruit SSD1306@^2.5.13
+    adafruit/RTClib@^2.1.4
+    adafruit/DHT sensor library@^1.4.6
+    knolleary/PubSubClient@^2.8
+```
+
+## 🔧 Hardware
+
+### Mapeamento de Pinos (ESP32 DevKit)
+
+| GPIO | Módulo | Função | Observação |
+| :---: | :--- | :--- | :--- |
+| 0 | LedRGB | Canal B | Strapping (boot) |
+| 2 | Audio | Buzzer D | Strapping (boot) |
+| 4 | LeitorRFID | RST | |
+| 5 | LeitorRFID | SS (SDA) | |
+| 13 | DHT22 | Dados (SDA) | |
+| 14 | Botao | Pushbutton | INPUT_PULLUP |
+| 15 | Audio | Buzzer E | Strapping (boot) |
+| 16 | Ultrassonico | ECHO | |
+| 17 | Ultrassonico | TRIG | |
+| 18 | LeitorRFID | SCK | |
+| 19 | LeitorRFID | MISO | |
+| 21 | DisplayOLED | I2C SDA | Wire.begin(21,22) |
+| 22 | DisplayOLED | I2C SCL | Wire.begin(21,22) |
+| 23 | LeitorRFID | MOSI | |
+| 25 | Porta | Switch | INPUT_PULLDOWN |
+| 26 | BotaoPanico | Pushbutton | INPUT_PULLUP + ISR |
+| 27 | PIR | Movimento | |
+| 32 | LedRGB | Canal R | |
+| 33 | LedRGB | Canal G | |
+| 34 | LDR | Leitura Analógica | Input-only |
+
+## 🧠 Regras de Ouro (Arquitetura)
+
+Sensores não decidem — só medem e filtram.
+
+Atuadores não leem sensores — só consomem estado.
+
+Alarme é fonte única de verdade — recebe struct/eventos.
+
+Eventos são fatos — botão foi pressionado, cartão foi lido.
+
+Toda transição é logada — auditoria completa.
+
+loop() só orquestra — update → coleta eventos → renderiza.
+
+MQTT é observador — comandos remotos pedem via API pública.
+
+NVS é passiva — não interfere na lógica do alarme.
+
+JSON é montado uma vez — montarJSONStatus() reutilizado por MQTT e Dashboard.
+
+Logs alimentam o ring buffer — toda chamada a logSerial() é auditável.
+
+## 📡 Comunicação MQTT (v7.4)
 
 | Tópico | Direção | Retain | Conteúdo |
 | :--- | :--- | :---: | :--- |
-| `rack_monitor_ABCD1234/status` | ESP32 → Site | ✅ | JSON com estado, modo, sensores, contadores, flags ambientais, `time_source` |
+| `rack_monitor_ABCD1234/status` | ESP32 → Site | ✅ | JSON com estado, modo, sensores, contadores, flags ambientais |
 | `rack_monitor_ABCD1234/status/lwt` | Broker → Site | ✅ | `{"status":"online"}` ou `{"status":"offline"}` (LWT) |
 | `rack_monitor_ABCD1234/comando` | Site → ESP32 | ❌ | `ARMAR`, `DESARMAR`, `STATUS`, `RESET <token>`, `TESTE` |
 | `rack_monitor_ABCD1234/ambiente` | ESP32 → Site | ✅ | JSON dedicado: temp, umid, estado ambiental, `sensor_dht_ok`, limiares |
-| `rack_monitor_ABCD1234/comando/ambiente` | Site → ESP32 | ❌ | `SET_TEMP_ALERTA`, `SET_TEMP_CRIT`, `SET_UMID_ALERTA`, `SET_UMID_CRIT`, `PANICO`, `STATUS_AMB` |
-| `rack_monitor_ABCD1234/logs` | ESP32 → Site | ❌ | Eventos detalhados (porta, cartão, transições, ambiente, OTA, pânico) |
+| `rack_monitor_ABCD1234/comando/ambiente` | Site → ESP32 | ❌ | `SET_TEMP_ALERTA`, `SET_TEMP_CRIT`, `PANICO`, `STATUS_AMB` |
+| `rack_monitor_ABCD1234/logs` | ESP32 → Site | ❌ | Eventos detalhados (porta, cartão, transições, ambiente) |
 | `rack_monitor_ABCD1234/heartbeat` | ESP32 → Site | ❌ | Sinal de vida a cada 30 s |
 
-#### Payload de status (exemplo)
+## 💾 Persistência NVS
 
-```json
-{
-  "estado": "NORMAL",
-  "modo": "ARMADO",
-  "ts": "2026-10-26T19:47:05",
-  "time_source": "RTC",
-  "porta": false,
-  "luz": false,
-  "dist_cm": 166.3,
-  "ativo": false,
-  "ip": "10.10.0.2",
-  "uid": "01020304",
-  "acessos": 5,
-  "invasoes": 1,
-  "rearmes": 1,
-  "alerta_temp": false,
-  "critico_temp": false,
-  "alerta_umid": false,
-  "critico_umid": false,
-  "taxa_temp_alerta": false,
-  "ambiente": "OK",
-  "temp_c": 18.5,
-  "umid_pct": 47.5
-}
-```
+Salvos na flash do ESP32:
 
-#### Features MQTT
+Configuração: limiar, timeout, t_alert, t_crit, u_alert, u_crit.
 
-- ✅ **LWT em tópico dedicado** (`.../status/lwt`) — não sobrescreve o status retido real
-- ✅ **Retain no status** — novos assinantes recebem o último estado imediatamente
-- ✅ **Retain no ambiente** — idem, em tópico separado
-- ✅ **Republicação automática** do status completo após reconectar
-- ✅ **Rate limit de `STATUS`** (10 s) — protege contra clientes abusivos
-- ✅ **`RESET` com token** — contadores de segurança (`invasoes`, `rearmes`) não são zerados
-- ✅ **Log de motivo de desconexão** (`rc=...`)
-- ✅ **Heartbeat a cada 30 s** — permite ao dashboard detectar queda em 60 s
-- ✅ **Reconexão automática** (Wi-Fi e MQTT a cada 5 s)
-- ✅ **Buffer MQTT** aumentado para 512 bytes
-- ✅ **KeepAlive MQTT** configurado para 120 s (reduz `rc=-3` em broker público)
+Contadores: invasoes, aberturas, acessos, desarmes, rearmes.
 
-### 💾 Persistência NVS
+Cartões RFID: total_cards + card_0, card_1, …
 
-#### Salvos na flash do ESP32
+Modo: modo (ARMADO / DESARMADO — persistido entre reboots e OTA).
 
-**Configuração:**
+## 🖥️ Comandos Serial (firmware v7.4)
 
-- `limiar` (distância de aproximação)
-- `timeout` (tempo de desarme)
-- `t_alert`, `t_crit`, `u_alert`, `u_crit` (limiares ambientais)
-- `modo` (ARMADO / DESARMADO — persistido entre reboots e OTA)
-
-**Contadores:**
-
-- `invasoes`, `aberturas`, `acessos`, `desarmes`, `rearmes`
-
-**Cartões RFID:**
-
-- `total_cards` + `card_0`, `card_1`, … (deduplicados)
-
-#### Comportamento
-
-- Salva ao mudar config (`SET LIMIAR`, `SET TIMEOUT`, `SET TEMP_*`, `SET UMID_*`, `RESET`, `ADD_CARD`)
-- Salva **na hora** ao mudar modo (`ARMAR`, `DESARMAR`, timeout) — garante persistência após OTA
-- Salva a cada 60 s **apenas se algum contador mudou** (dirty flag)
-- Carrega no `setup()` antes de iniciar a lógica
-
-> ⚠️ **Limitação do Wokwi:** a flash virtual é zerada ao parar a simulação.
-> Em hardware real, persiste normalmente.
-
----
-
-### 🖥️ Dashboard Externo (`index.html`)
-
-#### Design
-
-Dark mode com paleta semântica de cores.
-
-#### Estrutura visual
-
-- **Header** — logo + indicador de conexão + status do heartbeat ESP32
-- **Cards de Status** — Modo, Estado, Porta, IP, UID
-- **Cards de Contadores** — Acessos RFID, Invasões, Rearmes Bloqueados, Temperatura, Umidade
-- **Botões de Controle** — Armar, Desarmar, Modo Teste, Reset (token via `prompt`), Atualizar agora
-- **Gráfico histórico** — distância e temperatura (Chart.js, últimos 60 pontos, persistido em `localStorage`)
-- **Log de Eventos** — ações físicas + comandos remotos
-- **Histórico de Status** — transições de estado
-
-#### Sistema de cores semântico
-
-| Cor | Significado | Onde aparece |
-| :---: | :--- | :--- |
-| 🟢 Verde | Tudo normal | Estado `NORMAL`, `ACESSO RFID`, conexão online |
-| 🔵 Azul | Informação/manutenção | Modo `DESARMADO`, IP, acessos |
-| 🟡 Amarelo | Aviso | `AVISO SALA`, `APROXIMAÇÃO`, ambiente `ALERTA` |
-| 🔴 Vermelho | Perigo/crítico | `EMERGENCIA`, invasão, porta aberta (armado), ambiente `CRITICO` |
-| ⚪ Branco | Neutro | Modo `ARMADO`, porta fechada |
-
-#### Tecnologias
-
-- `mqtt.js` (via CDN) — conexão WebSocket
-- `wss://broker.emqx.io:8084/mqtt` — conexão segura
-- `Chart.js` (via CDN) — gráfico histórico
-- Fonte Inter (Google Fonts)
-- JavaScript puro (sem frameworks)
-
-#### Comportamento (v4.0)
-
-- **Sem polling agressivo** — o dashboard se atualiza por:
-  - **Retain** (ao conectar, recebe o último status e ambiente)
-  - **Transições** (firmware publica automaticamente)
-  - **Heartbeat** (a cada 30 s)
-  - **`STATUS` inicial** (1× ao conectar)
-- **LWT** assinado em `.../status/lwt` — detecta queda imediata do ESP32
-- **`RESET` com token** via `prompt()` — o token não fica hardcoded no HTML
-- **Botão "Atualizar agora"** — pede um `STATUS` sob demanda (respeitando o rate limit de 10 s); útil para diagnóstico
-- **Feedback visual de comandos** — botões desabilitam até confirmação via `rack/status` (ou timeout de 5 s)
-- **Histórico do gráfico** persistido em `localStorage`
-- **`temp_c: -999`** (DHT falhou) — não é plotado no gráfico
-- **`sensor_dht_ok: false`** — exibe alerta no dashboard de ambiente
-
-#### Correções aplicadas (v4.0)
-
-- ✅ Bug do `toFixed()` em mensagens sem `dist_cm`
-- ✅ Separação entre logs de eventos e histórico de status
-- ✅ Timestamp sempre exibido (formato `DD/MM HH:MM:SS`)
-- ✅ Quebra de palavras longas (`word-break: break-word`)
-- ✅ Nomes amigáveis para estados (`NORMAL`, não `SEGURO`)
-- ✅ Notificação de navegador em emergência (sem repetir)
-- ✅ `reconnectPeriod: 5000` explícito + feedback de reconexão
-
-### 🌐 Dashboard Local (SSE) — v7.4
-
-Além do dashboard externo (via MQTT), o ESP32 serve uma **página de contingência** própria.
-
-- **Acesso:** `http://<IP-do-ESP32>:8080/` (na mesma rede local).
-- **Tecnologia:** `WebServer` + **SSE (Server-Sent Events)** — HTTP puro, sem WebSocket.
-- **Funciona offline:** Não depende do broker MQTT nem da internet. Se o Wi-Fi do local cair, o ESP32 continua servindo o dashboard para quem estiver na mesma LAN.
-- **Atualização:** Tempo real (eventos de porta, temperatura, logs) via `EventSource`.
-- **Rotas:**
-  - `/` — Página HTML (autocontida, ~4KB)
-  - `/events` — Stream SSE (`text/event-stream`)
-  - `/api/status` — JSON pontual do status (fallback)
-  - `/api/hist` — JSON com os últimos 20 eventos do ring buffer
-- **HTML embutido:** O HTML/CSS/JS está em `PROGMEM` no firmware — zero dependência de filesystem.
-- **Single-client:** O `WebServer` do ESP32 atende um cliente SSE por vez (limitação conhecida do core). Ideal para um navegador de contingência.
-
-> ⚠️ **Nota Wokwi:** No simulador gratuito, o acesso externo à porta é bloqueado. O dashboard local funciona perfeitamente no hardware físico.
-
----
-
-### 🧪 MQTTX (cliente MQTT gráfico)
-
-#### O que é
-
-Um cliente MQTT gráfico (Web ou Desktop) que serve como "WhatsApp" para
-conversar com o ESP32 via broker.
-
-#### Por que é útil
-
-- **Ver mensagens em tempo real** — inscrever em `.../status` e `.../logs`
-- **Enviar comandos** — publicar em `.../comando` para testar `ARMAR`, `DESARMAR`, `RESET <token>`, `TESTE`
-- **Testar Retain e LWT** — verificar se o broker entregou a mensagem retida ou o testamento
-- **Debug de comunicação** — isolar se o problema é ESP32, broker ou site
-
-#### Como usar (MQTTX Desktop — TCP 1883)
-
-1. Conecte em `mqtt://broker.emqx.io:1883`
-2. Inscreva em `rack_monitor_ABCD1234/#` (recebe todos os tópicos do prefixo)
-3. Publique em `rack_monitor_ABCD1234/comando`:
-   - `STATUS` — pede status (respeita rate limit de 10 s)
-   - `ARMAR` / `DESARMAR` — muda modo
-   - `TESTE` — inicia autodiagnóstico
-   - `RESET rack2026` — zera contadores operacionais (preserva segurança)
-4. Publique em `rack_monitor_ABCD1234/comando/ambiente`:
-   - `PANICO` — dispara pânico remoto
-   - `SET_TEMP_CRIT 38` — ajusta limiar crítico de temperatura
-   - `STATUS_AMB` — pede um ambiente sob demanda
-
-#### MQTTX Web (WSS 8084)
-
-1. Acesse `mqttx.app/web-client`
-2. Conecte em `wss://broker.emqx.io:8084/mqtt`
-3. Mesmos tópicos/comandos do Desktop
-
-#### Conceitos MQTT aprendidos
-
-- **Broker** — intermediário que recebe e distribui mensagens
-- **Publish/Subscribe** — modelo de comunicação (não é cliente-servidor)
-- **Tópicos** — "canais" onde mensagens circulam
-- **QoS** — qualidade de serviço (0, 1, 2)
-- **Retain** — broker guarda a última mensagem do tópico
-- **LWT** — mensagem automática publicada se cliente desconectar sem avisar
-
-### 🖥️ Comandos Serial (firmware v7.4)
+## 🖥️ Comandos Serial (firmware v7.4)
 
 | Comando | Descrição |
 | :--- | :--- |
@@ -352,9 +273,8 @@ conversar com o ESP32 via broker.
 | `RTC` | Mostra hora e fonte de tempo |
 | `RTC YYYY-MM-DD HH:MM:SS` | Ajusta RTC manualmente |
 | `NTP` | Força sincronização NTP manual |
-| `OTA` | Mostra status do serviço OTA (hostname, porta, senha) |
-| `WEB` | Mostra a URL do Dashboard Local |
-| `HIST` | Despeja os últimos 100 eventos do ring buffer no Serial |
+| `OTA` | Mostra status do serviço OTA |
+| `HIST` | Despeja os últimos 100 eventos do ring buffer |
 | `HIST_JSON` | Despeja o histórico em formato JSON |
 | `HIST_CLEAR` | Limpa o histórico de eventos |
 | `RESET` | Zera contadores operacionais (preserva segurança) |
@@ -362,156 +282,97 @@ conversar com o ESP32 via broker.
 | `LIST_CARDS` | Lista cartões autorizados |
 | `HELP` | Lista comandos |
 
-#### Botão físico (multifunção)
+### Botão físico (multifunção)
 
 - **Curto** — reset operacional
 - **Longo** — rearme forçado
 - **Duplo** — modo teste
 
-#### Botão de pânico (GPIO 26)
+### Botão de pânico (GPIO 26)
 
 - **ISR** (FALLING edge) — resposta em < 30 ms
 - **Cooldown** de 2 s (evita bounce mecânico)
-- Dispara `INVASAO_SALA` imediatamente (ignora debounce de estado)
-- Ignorado em modo `DESARMADO` (evita fadiga de alarme)
+- Dispara `INVASAO_SALA` imediatamente
+- Ignorado em modo `DESARMADO`
 
 ---
 
-### 📁 Estrutura de Arquivos (PlatformIO)
+## 🧪 Testes
 
-```text
-RackMonitor-Elo5/
-├── platformio.ini      # Configuração do PlatformIO (board, libs)
-├── src/
-│   └── main.cpp        # Firmware ESP32 (código unificado v7.4)
-├── server/
-│   └── public/
-│       └── index.html  # Dashboard externo (MQTT/WebSocket)
-├── docs/               # Documentação Doxygen
-├── diagram.json        # Circuito no Wokwi
-├── CHANGELOG.md        # Histórico de versões
-└── README.md           # Este arquivo
+```bash
+# Testes nativos (rápidos, sem hardware)
+pio test -e native
+
+# Compilação do ESP32
+pio run -e esp32dev
 ```
 
-#### Bibliotecas necessárias (`platformio.ini`)
+## 🎯 Princípios de Arquitetura Aplicados
 
-```ini
-lib_deps = 
-    miguelbalboa/MFRC522@^1.4.11
-    adafruit/Adafruit GFX Library@^1.11.11
-    adafruit/Adafruit SSD1306@^2.5.13
-    adafruit/RTClib@^2.1.4
-    adafruit/DHT sensor library@^1.4.6
-    knolleary/PubSubClient@^2.8
-```
+1. **Sensores não decidem** — só medem e filtram.
+2. **Atuadores não leem sensores** — só consomem estado.
+3. **Alarme é fonte única de verdade** — recebe struct/eventos.
+4. **Eventos são fatos** — botão foi pressionado, cartão foi lido.
+5. **Toda transição é logada** — auditoria completa.
+6. **`loop()` só orquestra** — update → coleta eventos → renderiza.
+7. **MQTT é observador** — comandos remotos pedem via API pública.
+8. **NVS é passiva** — não interfere na lógica do alarme.
+9. **JSON é montado uma vez** — `montarJSONStatus()` reutilizado por MQTT e Dashboard.
+10. **Logs alimentam o ring buffer** — toda chamada a `logSerial()` é auditável.
 
-### 🎓 Princípios de Arquitetura Aplicados
+## ✅ O que está funcionando (v7.4)
 
-1. **Sensores não decidem** — só medem e filtram
-2. **Atuadores não leem sensores** — só consomem estado
-3. **Alarme é fonte única de verdade** — recebe struct/eventos
-4. **Eventos são fatos** — botão foi pressionado, cartão foi lido
-5. **Toda transição é logada** — auditoria completa
-6. **`loop()` só orquestra** — update → coleta eventos → renderiza
-7. **MQTT é observador** — comandos remotos pedem via API pública
-8. **NVS é passiva** — não interfere na lógica do alarme
-9. **JSON é montado uma vez** — `montarJSONStatus()` reutilizado por MQTT e Dashboard
-10. **Logs alimentam o ring buffer** — toda chamada a `logSerial()` é auditável
-
-### ✅ O que está funcionando (v7.4 / v4.0)
-
-#### Firmware
+### Firmware
 
 - ☑ Sensores com filtros e debounce
 - ☑ Máquina de estados com transições
 - ☑ RFID + botão emitindo eventos
 - ☑ Vigilante com bloqueio de rearme
 - ☑ Wi-Fi + MQTT (LWT, Retain, comandos segregados)
-- ☑ NVS (persistência de config, contadores, limiares ambientais, cartões, **modo**)
+- ☑ NVS (persistência de config, contadores, limiares, cartões, modo)
 - ☑ Logs de auditoria via MQTT
 - ☑ Alarmes ambientais (temp/umid) com histerese, crítico e taxa de subida
-- ☑ Estado ambiental consolidado no JSON de status
+- ☑ Estado ambiental consolidado no JSON
 - ☑ Rate limit de `STATUS` (10 s) + `RESET` com token
 - ☑ Dirty flag para reduzir desgaste da flash
 - ☑ **NTP + RTC Sync** com fallback para millis
 - ☑ **OTA (ArduinoOTA)** com callbacks de progresso
 - ☑ **Botão de pânico** com ISR (< 30 ms)
-- ☑ **Ring Buffer** de 100 eventos em RAM (auditoria pós-incidente)
-- ☑ **Dashboard Local (SSE)** na porta 8080 (contingência offline)
+- ☑ **Ring Buffer** de 100 eventos em RAM
+- ☑ **Dashboard Local (SSE)** na porta 8080
 - ☑ **Persistência do modo** entre reboots e OTA
 
-#### Dashboard Externo
+### Arquitetura
 
-- ☑ Conexão WebSocket com broker
-- ☑ Atualização em tempo real via retain + transições + heartbeat
-- ☑ Sistema de cores semântico
-- ☑ Logs separados (eventos + histórico)
-- ☑ Comandos remotos funcionais (`RESET` com token via `prompt`)
-- ☑ Timestamp em todos os logs
-- ☑ Gráfico histórico com persistência em `localStorage`
-- ☑ Detecção de queda do ESP32 via LWT + heartbeat
-- ☑ Sem polling agressivo
-
-#### Dashboard Local
-
-- ☑ Página HTML autocontida (~4KB, sem CDN)
-- ☑ SSE em tempo real (`text/event-stream`)
-- ☑ Fallback JSON (`/api/status`)
-- ☑ Histórico de eventos (`/api/hist`)
-- ☑ Reconexão automática do `EventSource`
-
-### ⚠️ Limitações do ambiente gratuito
-
-| Limitação | Impacto |
-| :--- | :--- |
-| Wokwi gratuito só roda com a aba aberta | ESP32 "morre" ao fechar; dashboard fica offline |
-| Gateway público do Wokwi | ESP32 não recebe conexões de entrada (dashboard local não acessível) |
-| Broker público `broker.emqx.io` | Sem autenticação; qualquer um pode publicar em `.../comando` |
-| Token de `RESET` no firmware | `rack2026` é público — troque por um valor seu antes de produção |
-| Flash virtual do Wokwi zera ao parar | NVS não persiste entre sessões de simulação |
+- ☑ **20 bibliotecas** na pasta `lib/`
+- ☑ `main.cpp` como orquestrador puro (~280 linhas)
+- ☑ **12 testes nativos** passando (alarme, JSON, ring buffer)
+- ☑ Documentação embutida (Doxygen) e CHANGELOG
 
 ---
 
-### 🔐 Segurança — Recomendações para Produção
+## 🚀 Próximos passos sugeridos
 
-Antes de qualquer demonstração ou uso real, **troque estas credenciais** no firmware:
-
-| Constante | Valor padrão | Ação |
-| :--- | :--- | :--- |
-| `MQTT_RESET_TOKEN` | `"rack2026"` | Troque por string forte (16+ chars aleatórios) |
-| `OTA_PASSWORD` | `"rack@2026#ota"` | Troque por senha forte |
-| `WIFI_SSID` / `WIFI_PASSWORD` | `"Wokwi-GUEST"` / `""` | Use as credenciais da sua rede real |
-| `OTA_HOSTNAME` | `"rack-ABCD1234"` | Personalize (evita conflito com outros ESP32) |
-
-**Nunca commite essas senhas no GitHub.** Use gerenciador de senhas ou `.env` fora do repositório.
+- **HMAC nos comandos MQTT** — assinar `ARMAR`/`DESARMAR` com SHA256 + timestamp.
+- **Broker privado** — migrar do `broker.emqx.io` para um HiveMQ Cloud com TLS.
+- **CI/CD (GitHub Actions)** — rodar os 12 testes automaticamente a cada push.
+- **Testes E2E** — validar o sistema completo via MQTT com Python.
+- **Testes no hardware físico** — validar OTA, NTP e Dashboard Local.
+- **Notificação push** — integrar com Telegram ou ntfy.sh.
+- **Persistência do histórico** — backend com InfluxDB / SQLite.
 
 ---
 
-### 🚀 Próximos passos sugeridos
+## 📌 Lembretes importantes
 
-- **HMAC nos comandos MQTT** — assinar `ARMAR`/`DESARMAR` com SHA256 + timestamp (anti-replay) para evitar que qualquer um desarme o rack via broker público.
-- **Broker privado** — migrar do `broker.emqx.io` público para um HiveMQ Cloud (free tier) com TLS.
-- **TLS no firmware** — `WiFiClientSecure` + porta 8883.
-- **Hospedar o dashboard** — GitHub Pages, Vercel ou Netlify (gratuito).
-- **Testes em hardware real** — validar OTA, NTP e Dashboard Local no ESP32 físico.
-- **Notificação push** — integrar com Telegram ou ntfy.sh para alertas críticos.
-- **Dois sensores DHT** — entrada e saída de ar do rack (pontos quentes).
-- **Persistência do histórico** — backend com InfluxDB / SQLite para séries temporais.
-
----
-
-### 📌 Lembretes importantes
-
-- **Backup:** baixe uma cópia do `src/main.cpp` e `index.html` para o seu computador.
-- **Bibliotecas:** devem estar no `platformio.ini` (PlatformIO) ou `libraries.txt` (Wokwi).
-- **`Wokwi-GUEST`** — rede Wi-Fi virtual do Wokwi (sem senha).
-- **`broker.emqx.io`** — broker público gratuito (limite de mensagens).
+- **Backup:** baixe uma cópia do `src/main.cpp` e `index.html`.
+- **Bibliotecas:** devem estar no `platformio.ini`.
+- **`broker.emqx.io`** — broker público gratuito.
 - **Porta 8084 (WSS)** — usada pelo navegador; **1883 (TCP)** — usada pelo ESP32.
 - **Porta 8080 (HTTP)** — usada pelo Dashboard Local no hardware físico.
-- **Prefixos de tópico** — o `rack_monitor_ABCD1234` deve ser idêntico no firmware, MQTTX e dashboard.
-- **Token de RESET** — troque `rack2026` por um valor seu no firmware antes de qualquer demonstração pública.
-
----
+- **Prefixos de tópico** — o `rack_monitor_ABCD1234` deve ser idêntico no firmware e no dashboard.
+- **Token de RESET** — troque `rack2026` por um valor seu no `config.h` antes de produção.
+- **Wi-Fi** — troque `Wokwi-GUEST` pelas credenciais da sua rede real no `config.h`.
 
 ## 📚 Referências e Agradecimentos
 
@@ -521,238 +382,32 @@ Este projeto foi construído sobre os ombros de gigantes. Agradecimentos às seg
 
 - [**PlatformIO**](https://platformio.org/) — IDE e build system para embarcados
 - [**Wokwi**](https://docs.wokwi.com/) — Simulador de ESP32 (gratuito)
-- [**PubSubClient**](https://pubsubclient.knolleary.net/) — Cliente MQTT para Arduino/ESP32
-- [**MFRC522**](https://github.com/miguelbalboa/rfid) — Biblioteca do leitor RFID
+- [**PubSubClient**](https://pubsubclient.knolleary.net/) — Cliente MQTT
+- [**MFRC522**](https://github.com/miguelbalboa/rfid) — Biblioteca do RFID
 - [**Adafruit SSD1306**](https://learn.adafruit.com/monochrome-oled-breakouts) + [**GFX**](https://learn.adafruit.com/adafruit-gfx-graphics-library) — Display OLED
 - [**RTClib**](https://learn.adafruit.com/adafruit-ds3231-precision-rtc-breakout) — Driver do RTC DS3231
 - [**DHT sensor library**](https://learn.adafruit.com/dht) — Sensor DHT22
-- [**Preferences**](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/preferences.html) — NVS (persistência em flash)
-- [**ArduinoOTA**](https://arduino-esp32.embarkx.in/.../ArduinoOTA) — Atualização Over-The-Air
+- [**Preferences**](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/preferences.html) — NVS
+- [**ArduinoOTA**](https://arduino-esp32.embarkx.in/.../ArduinoOTA) — OTA
 - [**WebServer**](https://github.com/espressif/arduino-esp32/tree/master/libraries/WebServer) — Servidor HTTP built-in
-- [**Doxygen**](https://www.doxygen.nl/) — Geração automática da documentação técnica
+- [**Doxygen**](https://www.doxygen.nl/) — Documentação automática
 
 ### Conceitos e Tutoriais
 
-- [MQTT Essentials (HiveMQ)](https://www.hivemq.com/mqtt-essentials/) — Excelente introdução aos conceitos de MQTT
-- [MQTT Retain and LWT (EMQX)](https://www.emqx.com/en/blog/mqtt-retained-messages) — Documentação sobre Retain e Last Will
+- [MQTT Essentials (HiveMQ)](https://www.hivemq.com/mqtt-essentials/) — Introdução ao MQTT
+- [MQTT Retain and LWT (EMQX)](https://www.emqx.com/en/blog/mqtt-retained-messages) — Retain e Last Will
 - [ESP32 Strapping Pins (Espressif)](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/gpio.html) — Cuidados com GPIOs 0, 2, 12 e 15
 - [Server-Sent Events (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events) — Referência do SSE
 - [ArduinoOTA (ESP32)](https://arduino-esp32.embarkx.in/...) — Como funciona o OTA no ESP32
 
 ### Inspiração
 
-- Documentação da [Arduino Reference](https://www.arduino.cc/reference/en/) — Boas práticas de código embarcado
+- [Arduino Reference](https://www.arduino.cc/reference/en/) — Boas práticas de código embarcado
 - [The Twelve-Factor App](https://12factor.net/) — Princípios de design de software
 
-Este é o `README.md` completo, atualizado para a **v7.4**. Você pode copiar o bloco de código acima e substituir o conteúdo do seu arquivo `README.md` atual. Todas as tabelas, badges, negritos e ícones estão preservados no formato Markdown.
+```text
 
+---
 
-
-
-Perfeito! Vamos fechar o dia com um plano claro e detalhado do que faremos amanhã. Guarde esta mensagem (ou copie para um arquivo ROADMAP.md no seu projeto) para consultar amanhã.
-
-🗺️ Roadmap de Refatoração — Fases 3, 4 e 5
-Data de início: 28/10/2026 (amanhã)
-Estado atual: Fases 1 e 2 concluídas, 12 testes nativos passando, ESP32 compilando com sucesso.
-
-🎯 Objetivo final
-Reduzir o main.cpp de ~2.500 linhas para ~150 linhas, contendo apenas:
-
-Includes
-
-Variáveis de estado
-
-Instâncias globais
-
-setup() e loop()
-
-📅 Fase 3 — Extrair os Módulos de Hardware (amanhã de manhã)
-Duração estimada: 2–3 horas
-Risco: Médio (muitas classes, mas isoladas)
-
-O que faremos
-Mover cada classe de hardware para um arquivo .h e .cpp na pasta lib/. O PlatformIO compila a pasta lib/ automaticamente, então o linker vai encontrar tudo.
-
-Estrutura final da lib/
-text
-lib/
-├── ldr/
-│   ├── ldr.h
-│   └── ldr.cpp
-├── ultrassonico/
-│   ├── ultrassonico.h
-│   └── ultrassonico.cpp
-├── porta/
-│   ├── porta.h
-│   └── porta.cpp
-├── pir/
-│   ├── pir.h
-│   └── pir.cpp
-├── botao/
-│   ├── botao.h
-│   └── botao.cpp
-├── botao_panico/
-│   ├── botao_panico.h
-│   └── botao_panico.cpp
-├── leitor_rfid/
-│   ├── leitor_rfid.h
-│   └── leitor_rfid.cpp
-├── led_rgb/
-│   ├── led_rgb.h
-│   └── led_rgb.cpp
-├── audio/
-│   ├── audio.h
-│   └── audio.cpp
-├── display_oled/
-│   ├── display_oled.h
-│   └── display_oled.cpp
-└── sensor_dht/
-    ├── sensor_dht.h
-    └── sensor_dht.cpp
-Ordem de execução (menor risco primeiro)
-LDR (independente, fácil)
-
-PIR (idem)
-
-Porta (idem)
-
-Ultrassonico (idem)
-
-SensorDHT (idem)
-
-LedRGB (depende de Pins e PWM_FREQ)
-
-Audio (depende de EstadoSistema e EstadoAmbiental)
-
-DisplayOLED (depende de LeiturasSensores, EstadoSistema, relogio, etc.)
-
-Botao (independente)
-
-BotaoPanico (já isolado, mas o IRAM_ATTR precisa de cuidado)
-
-LeitorRFID (depende de MFRC522 e EventoRFID)
-
-Estratégia para cada classe
-Para cada classe, faremos:
-
-Criar lib/<classe>/<classe>.h (declaração da classe).
-
-Criar lib/<classe>/<classe>.cpp (implementação).
-
-No main.cpp: remover a classe, adicionar #include "<classe>.h".
-
-Manter a instância global no main.cpp (ex: LDR ldr;).
-
-Rodar pio run -e esp32dev (build).
-
-Rodar pio test -e native (regressão).
-
-Se ambos passarem, seguir para a próxima classe.
-
-Critério de sucesso da Fase 3
-main.cpp sem nenhuma das classes de hardware.
-
-Build do ESP32 passando.
-
-12 testes nativos passando.
-
-📅 Fase 4 — Extrair a Lógica (amanhã de tarde)
-Duração estimada: 2–3 horas
-Risco: Alto (o Alarme é o coração do sistema)
-
-O que faremos
-Mover as classes de lógica (que não dependem diretamente de hardware) para a lib/.
-
-Estrutura final
-text
-lib/
-├── relogio/
-│   ├── relogio.h
-│   └── relogio.cpp
-├── alarme/
-│   ├── alarme.h
-│   └── alarme.cpp
-├── notificador_mqtt/
-│   ├── notificador_mqtt.h
-│   └── notificador_mqtt.cpp
-└── dashboard_web/
-    ├── dashboard_web.h
-    └── dashboard_web.cpp
-Ordem de execução
-Relogio (depende de RTC_DS3231 e FonteTempo, já testado).
-
-Alarme (depende de EstadoSistema, ModoVigilante, LeiturasSensores, etc. — o núcleo da máquina de estados).
-
-NotificadorMQTT (depende de PubSubClient, montarJSONStatus()).
-
-DashboardWeb (depende de WebServer, montarJSONStatus(), logBuffer).
-
-Estratégia especial para o Alarme
-O Alarme usa prefs (NVS) e audio (instâncias globais). Para evitar dependência circular:
-
-Manter prefs e audio como instâncias globais no main.cpp.
-
-No alarme.h, usar extern para referenciá-los:
-
-cpp
-extern Preferences prefs;
-extern Audio audio;
-Critério de sucesso da Fase 4
-main.cpp contém apenas:
-
-Includes
-
-Variáveis de estado (floats, bools)
-
-Instâncias globais (displays, sensores, etc.)
-
-setup() e loop()
-
-Build do ESP32 passando.
-
-12 testes nativos passando.
-
-Bônus: rodar o sistema no Wokwi novamente para confirmar que tudo funciona igual.
-
-📅 Fase 5 — Testes E2E e CI/CD (amanhã à noite, se der tempo)
-Duração estimada: 1–2 horas
-Risco: Baixo
-
-O que faremos
-GitHub Actions: Criar .github/workflows/test.yml para rodar os 12 testes nativos a cada git push.
-
-Testes E2E com Python: Criar tests/e2e/test_mqtt.py para validar o sistema completo via MQTT (sem hardware, usando o broker público).
-
-Atualizar o README.md com a nova estrutura modular.
-
-🚦 Como retomar amanhã
-Quando você abrir o VS Code amanhã:
-
-Verifique se está tudo commitado:
-
-bash
-git status
-Deve mostrar working tree clean.
-
-Verifique se ainda compila e testa:
-
-bash
-pio test -e native
-pio run -e esp32dev
-Comece pela Fase 3, classe LDR. Eu te mando o código do lib/ldr/ldr.h e lib/ldr/ldr.cpp, e você aplica.
-
-Após cada classe, rode os dois comandos e me diga o resultado. Se algo quebrar, a gente isola o problema antes de seguir.
-
-📝 Resumo do estado atual
-Item	Status
-Fase 1: Ring Buffer modularizado	✅ Concluída
-Fase 2: Config/State extraídos	✅ Concluída
-Fase 3: Hardware em lib/	⏳ Amanhã
-Fase 4: Lógica em lib/	⏳ Amanhã
-Fase 5: CI/CD + E2E	⏳ Amanhã (bônus)
-Build ESP32	✅ [SUCCESS]
-Testes nativos (12/12)	✅ Passando
-Git commit + push	🔄 Em andamento
-Bom descanso! Amanhã começamos a Fase 3 pela classe LDR, que é a mais simples. Cada classe é uma vitória pequena, e ao final do dia o main.cpp vai estar enxuto e profissional.
-
-Até amanhã! 🚀
+Este é o **`README.md` completo e atualizado para a v7.4**. Ele reflete a nova estrutura modular, os 12 testes nativos, a pasta `lib/` com 20 bibliotecas, e mantém toda a documentação e badges profissionais. Você pode substituir o conteúdo do seu `README.md` atual por este bloco inteiro.
+```
