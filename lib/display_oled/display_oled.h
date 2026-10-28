@@ -17,6 +17,7 @@ class DisplayOLED
 public:
     DisplayOLED(); // <-- ADICIONE ESTA LINHA
     void begin();
+    Adafruit_SSD1306 &getDisplay() { return _display; }
     void mostrarStatus(EstadoSistema estado, ModoVigilante modo,
                        const LeiturasSensores &s,
                        const String &uidDesarme, bool cartaoOk,

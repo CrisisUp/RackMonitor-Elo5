@@ -12,6 +12,8 @@ public:
     void begin();
     EventoRFID ler();
 
+    MFRC522 &getRFID() { return _rfid; }
+
 private:
     MFRC522 _rfid;
 };
