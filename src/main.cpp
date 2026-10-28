@@ -1,18 +1,29 @@
 /**
- * @file RackMonitor.ino
+ * @file main.cpp
  * @brief Sistema de Monitoramento de Rack (ESP32).
  *
- * Versão 7.3 - Ring buffer de eventos + HIST (debug pós-incidente).
+ * Versão 7.4 - Modularizado, testado nativamente e com documentação embutida.
  *
  * Arquitetura:
  * Sensores -> Eventos -> Alarme (única fonte de verdade) -> Atuadores
  * (Display, LED, Áudio) + MQTT (observador) + OTA (manutenção) +
- * RingBufferLog (auditoria em RAM).
+ * RingBufferLog (auditoria em RAM) + Dashboard Local (contingência).
+ *
+ * Este arquivo é o ponto de entrada do firmware. Ele apenas:
+ *  - Inicializa os módulos no setup()
+ *  - Orquestra o ciclo no loop()
+ *
+ * Toda a lógica está encapsulada nas bibliotecas em lib/.
  */
 
 // =========================================================================
 // CHANGELOG
 // =========================================================================
+//   v7.4 - MODULARIZAÇÃO E TESTES:
+//          [1] Todas as classes movidas para lib/ (hardware, lógica, comunicação).
+//          [2] main.cpp reduzido a um orquestrador puro.
+//          [3] 12 testes nativos passando (alarme, json, ring buffer).
+//          [4] Documentação de arquitetura preservada.
 //   v7.3 - RING BUFFER + HIST:
 //          [1] Buffer circular de 100 eventos em RAM (sem String, sem malloc).
 //          [2] Struct EventoLog { uint32_t ms; uint8_t nivel; char msg[64]; }.
@@ -51,7 +62,7 @@
 //  22   | DisplayOLED  | I2C SCL (OLED + RTC)      | Verde Claro   | Wire.begin(21,22)
 //  23   | LeitorRFID   | MOSI                      | Azul Claro    |
 //  25   | Porta        | Switch                    | Verde         | INPUT_PULLDOWN
-//  26   | BotaoPanico  | Pushbutton (v7.0)         | Branco.       | INPUT_PULLUP + ISR
+//  26   | BotaoPanico  | Pushbutton (v7.0)         | Branco        | INPUT_PULLUP + ISR
 //  27   | PIR          | Movimento                 | Verde Claro   |
 //  32   | LedRGB       | Canal R                   | Marrom        |
 //  33   | LedRGB       | Canal G                   | Verde         |
@@ -85,25 +96,18 @@
 // =========================================================================
 // INCLUDES
 // =========================================================================
-#include <Wire.h>
-#include <SPI.h>
-#include <MFRC522.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
-#include <RTClib.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
-#include <Preferences.h>
-#include <vector>
-#include <DHT.h>
-#include <math.h>
-#include <time.h>
-#include <ArduinoOTA.h>
 
+// Bibliotecas do sistema
+#include <Wire.h>
+#include <vector>
+
+// Configurações e estruturas globais
 #include "config.h"
 #include "state.h"
 #include "ring_buffer.h"
 #include "json_builder.h"
+
+// Bibliotecas do projeto (lib/)
 #include "ldr.h"
 #include "pir.h"
 #include "porta.h"
@@ -122,6 +126,8 @@
 #include "ota.h"
 #include "test_mode.h"
 #include "serial_commands.h"
+#include "log_central.h"
+#include "alarme_ambiental.h"
 
 // =========================================================================
 // VARIÁVEIS DE ESTADO (mudam durante a execução)
@@ -140,7 +146,7 @@ bool taxaTempAlerta = false;
 // Watchdog do DHT22
 unsigned long _ultimaLeituraValidaDHT = 0;
 bool _sensorDHTPerdido = false;
-constexpr unsigned long TIMEOUT_DHT_MS = 10000UL; // Mantido aqui, se não estiver no config.h
+constexpr unsigned long TIMEOUT_DHT_MS = 10000UL;
 
 // Cache das últimas leituras válidas do DHT
 float _ultimaTempValida = -999.0f;
@@ -156,341 +162,74 @@ unsigned long _tempoAnteriorTaxa = 0;
 
 bool contadoresDirty = false;
 
+// Cartões autorizados (padrão)
 const String CARTAO_AUTORIZADO_1 = "01020304";
 const String CARTAO_AUTORIZADO_2 = "55667788";
-
 std::vector<String> cartoesAutorizados;
 
 // =========================================================================
-// PERIFÉRICOS
+// INSTÂNCIAS GLOBAIS
 // =========================================================================
 
+// Persistência e auditoria
 Preferences prefs;
-
-// =========================================================================
-// [v7.3] RING BUFFER DE EVENTOS
-// =========================================================================
-// Buffer circular em RAM. O(n) no dump, O(1) no push.
-// Protegido contra ISR via noInterrupts()/interrupts() no push — o botão
-// de pânico pode chamar registrarEvento() de dentro da ISR sem corromper
-// o índice circular.
-// =========================================================================
-
 RingBufferLog logBuffer;
 
-// =========================================================================
-// LOG CENTRALIZADO — protótipos ANTES de Relogio
-// =========================================================================
-
-void logSerial(const String &nivel, const String &tag, const String &mensagem);
-void registrarEvento(const String &nivel, const String &tag, const String &mensagem);
-void enviarLogSite(const String &mensagem);
-
-// =========================================================================
-// MÓDULO: RELÓGIO (v7.1 — NTP + RTC + fallback millis)
-// =========================================================================
-
+// Sensores e atuadores
+LDR ldr;
+PIR pir;
+Porta porta;
+Ultrassonico ultrassonico;
+SensorDHT dht;
+LedRGB led;
+Audio audio;
+DisplayOLED oled;
 Relogio relogio;
 
-// =========================================================================
-// LOG CENTRALIZADO — implementação (usa relogio.timestamp())
-// =========================================================================
-
-/**
- * @brief Log na Serial E no ring buffer. Este é o ponto único de entrada
- *        para logs de eventos. Todo o código deve chamar isto (via
- *        registrarEvento) em vez de Serial.println direto.
- */
-void logSerial(const String &nivel, const String &tag, const String &mensagem)
-{
-    Serial.print("[");
-    Serial.print(relogio.timestamp());
-    Serial.print("] [");
-    Serial.print(nivel);
-    Serial.print("]");
-    if (nivel.length() == 4)
-        Serial.print(" ");
-    Serial.print(" [");
-    Serial.print(tag);
-    Serial.print("] ");
-    Serial.println(mensagem);
-
-    // [v7.3] Alimenta o ring buffer (exceto se o buffer ainda não foi iniciado)
-    // Mapeia o nível string para o enum numérico
-    uint8_t n = NIVEL_INFO;
-    if (nivel == "WARN")
-        n = NIVEL_WARN;
-    else if (nivel == "ALERT")
-        n = NIVEL_ALERT;
-    else if (nivel == "CRIT")
-        n = NIVEL_CRIT;
-
-    // Formato compacto no buffer: "[TAG] mensagem"
-    char buf[HIST_MSG_MAX];
-    snprintf(buf, sizeof(buf), "[%s] %s", tag.c_str(), mensagem.c_str());
-    logBuffer.push(n, buf);
-}
-
-// Wrapper semântico — quem chama registrarEvento está ciente de que é
-// um evento de auditoria (não um log interno qualquer).
-void registrarEvento(const String &nivel, const String &tag, const String &mensagem)
-{
-    logSerial(nivel, tag, mensagem);
-}
-
-LDR ldr;
-
-Ultrassonico ultrassonico;
-
-Porta porta;
-
-PIR pir;
-
+// Botões
 Botao botao;
-
 BotaoPanico botaoPanico;
 
+// RFID, Alarme e MQTT
 LeitorRFID leitorRFID;
-
-LedRGB led;
-
-Audio audio;
-
-DisplayOLED oled;
-
-SensorDHT dht;
-
 Alarme alarme;
-
 NotificadorMQTT notificador;
 
 // =========================================================================
-// ALARME AMBIENTAL
+// VARIÁVEIS DE CONTROLE DO LOOP
 // =========================================================================
+unsigned long tempoUltimoBip = 0;
+unsigned long tempoUltimoPisca = 0;
+bool estadoPiscaLED = false;
 
-void _verificarAmbiente(float temp, float umid)
-{
-    if (temp == -999.0f || umid == -999.0f)
-    {
-        if (_ultimaLeituraValidaDHT > 0 &&
-            (millis() - _ultimaLeituraValidaDHT) > 10000UL)
-        {
-            if (!_sensorDHTPerdido)
-            {
-                _sensorDHTPerdido = true;
-                alertaTempAtivo = false;
-                criticoTempAtivo = false;
-                alertaUmidAtivo = false;
-                criticoUmidAtivo = false;
-                taxaTempAlerta = false;
-                if (estadoAmbiental != AMB_OK)
-                {
-                    estadoAmbiental = AMB_OK;
-                    audio.forcarSilencio();
-                }
-                logSerial("WARN", "AMBIENTE", "DHT22 sem leitura ha 10s. Estado ambiental resetado.");
-                enviarLogSite("Sensor DHT22 sem leitura. Monitoramento ambiental pausado.");
-            }
-        }
-        return;
-    }
+unsigned long tempoUltimoSalvamento = 0;
+constexpr unsigned long INTERVALO_SALVAMENTO_MS = 60000UL;
 
-    _ultimaLeituraValidaDHT = millis();
-    if (_sensorDHTPerdido)
-    {
-        _sensorDHTPerdido = false;
-        logSerial("INFO", "AMBIENTE", "DHT22 voltou a responder. Retomando monitoramento.");
-        enviarLogSite("Sensor DHT22 restabelecido.");
-    }
-
-    unsigned long agora = millis();
-    if (_tempoAnteriorTaxa == 0)
-    {
-        _tempAnteriorTaxa = temp;
-        _tempoAnteriorTaxa = agora;
-    }
-    else if (agora - _tempoAnteriorTaxa >= INTERVALO_AMOSTRA_TAXA_MS)
-    {
-        float dtMin = (agora - _tempoAnteriorTaxa) / 60000.0f;
-        float taxa = (temp - _tempAnteriorTaxa) / dtMin;
-
-        if (!taxaTempAlerta && taxa >= TAXA_ALERTA_C_POR_MIN)
-        {
-            taxaTempAlerta = true;
-            logSerial("CRIT", "AMBIENTE",
-                      "SUBIDA RAPIDA: " + String(taxa, 2) + " C/min (limiar " +
-                          String(TAXA_ALERTA_C_POR_MIN, 2) + " C/min)");
-            enviarLogSite("CRITICO: Temperatura subindo " + String(taxa, 2) + " C/min!");
-        }
-        else if (taxaTempAlerta &&
-                 (temp < limiarTempAlerta || taxa < (TAXA_ALERTA_C_POR_MIN * 0.5f)))
-        {
-            taxaTempAlerta = false;
-            logSerial("INFO", "AMBIENTE",
-                      "Taxa de subida normalizada: " + String(taxa, 2) + " C/min");
-        }
-
-        _tempAnteriorTaxa = temp;
-        _tempoAnteriorTaxa = agora;
-    }
-
-    if (taxaTempAlerta && temp < limiarTempAlerta)
-    {
-        taxaTempAlerta = false;
-        logSerial("INFO", "AMBIENTE",
-                  "Taxa de subida resetada (temperatura segura: " + String(temp, 1) + "C).");
-    }
-
-    if (!alertaTempAtivo && temp >= limiarTempAlerta)
-    {
-        alertaTempAtivo = true;
-        logSerial("WARN", "AMBIENTE",
-                  "Temperatura alta: " + String(temp, 1) + "C (limiar " +
-                      String(limiarTempAlerta, 1) + "C)");
-        enviarLogSite("ALERTA: Temperatura do rack em " + String(temp, 1) + "C");
-    }
-    else if (alertaTempAtivo && temp <= (limiarTempAlerta - TEMP_HISTERESE))
-    {
-        alertaTempAtivo = false;
-        logSerial("INFO", "AMBIENTE",
-                  "Temperatura normalizada: " + String(temp, 1) + "C");
-        enviarLogSite("Temperatura do rack normalizada.");
-    }
-
-    if (!criticoTempAtivo && temp >= limiarTempCritico)
-    {
-        criticoTempAtivo = true;
-        logSerial("CRIT", "AMBIENTE",
-                  "TEMPERATURA CRITICA: " + String(temp, 1) + "C!");
-        enviarLogSite("CRITICO: Temperatura do rack em " + String(temp, 1) + "C!");
-    }
-    else if (criticoTempAtivo && temp <= (limiarTempCritico - TEMP_HISTERESE))
-    {
-        criticoTempAtivo = false;
-        logSerial("INFO", "AMBIENTE",
-                  "Temperatura critica normalizada: " + String(temp, 1) + "C");
-        enviarLogSite("Temperatura critica normalizada.");
-    }
-
-    if (!alertaUmidAtivo && umid >= limiarUmidAlerta)
-    {
-        alertaUmidAtivo = true;
-        logSerial("WARN", "AMBIENTE",
-                  "Umidade alta: " + String(umid, 1) + "% (limiar " +
-                      String(limiarUmidAlerta, 1) + "%)");
-        enviarLogSite("ALERTA: Umidade do rack em " + String(umid, 1) + "%");
-    }
-    else if (alertaUmidAtivo && umid <= (limiarUmidAlerta - UMID_HISTERESE))
-    {
-        alertaUmidAtivo = false;
-        logSerial("INFO", "AMBIENTE",
-                  "Umidade normalizada: " + String(umid, 1) + "%");
-        enviarLogSite("Umidade do rack normalizada.");
-    }
-
-    if (!criticoUmidAtivo && umid >= limiarUmidCritico)
-    {
-        criticoUmidAtivo = true;
-        logSerial("CRIT", "AMBIENTE",
-                  "UMIDADE CRITICA: " + String(umid, 1) + "% (risco de condensacao)");
-        enviarLogSite("CRITICO: Umidade do rack em " + String(umid, 1) + "%!");
-    }
-    else if (criticoUmidAtivo && umid <= (limiarUmidCritico - UMID_HISTERESE))
-    {
-        criticoUmidAtivo = false;
-        logSerial("INFO", "AMBIENTE",
-                  "Umidade critica normalizada: " + String(umid, 1) + "%");
-        enviarLogSite("Umidade critica normalizada.");
-    }
-
-    EstadoAmbiental novoEstado;
-    if (criticoTempAtivo || criticoUmidAtivo || taxaTempAlerta)
-    {
-        novoEstado = AMB_CRITICO;
-    }
-    else if (alertaTempAtivo || alertaUmidAtivo)
-    {
-        novoEstado = AMB_ALERTA;
-    }
-    else
-    {
-        novoEstado = AMB_OK;
-    }
-
-    if (novoEstado != estadoAmbiental)
-    {
-        const char *nomes[] = {"OK", "ALERTA", "CRITICO"};
-        logSerial(novoEstado == AMB_OK ? "INFO" : novoEstado == AMB_ALERTA ? "WARN"
-                                                                           : "CRIT",
-                  "AMBIENTE",
-                  String("Estado ambiental: ") + nomes[estadoAmbiental] +
-                      " -> " + nomes[novoEstado]);
-
-        if (estadoAmbiental != AMB_OK && novoEstado == AMB_OK)
-        {
-            audio.forcarSilencio();
-        }
-
-        estadoAmbiental = novoEstado;
-    }
-
-#if ALARME_SONORO_AMBIENTAL
-    bool segurancaCritica = (alarme.estadoAtual == EMERGENCIA_RACK ||
-                             alarme.estadoAtual == INVASAO_SALA);
-    if (!segurancaCritica)
-    {
-        static unsigned long _ultimoBipAmbiental = 0;
-        unsigned long agoraBip = millis();
-
-        if (estadoAmbiental == AMB_CRITICO && agoraBip - _ultimoBipAmbiental >= 3000)
-        {
-            tone(Pins::BUZZER_D, 400, 200);
-            _ultimoBipAmbiental = agoraBip;
-        }
-        else if (estadoAmbiental == AMB_ALERTA && agoraBip - _ultimoBipAmbiental >= 8000)
-        {
-            tone(Pins::BUZZER_E, 700, 150);
-            _ultimoBipAmbiental = agoraBip;
-        }
-    }
-#endif
-}
-
-// =========================================================================
-// ENVIO DE LOG PARA O SITE
-// =========================================================================
-
-void enviarLogSite(const String &mensagem)
-{
-    if (notificador.estaConectado())
-    {
-        String payload = "{\"ts\":\"" + relogio.timestamp() +
-                         "\",\"msg\":\"" + jsonEscape(mensagem) + "\"}";
-        if (!notificador.publicarLog(payload))
-        {
-            Serial.println(F("[WARN] Fila MQTT cheia, log descartado."));
-        }
-    }
-}
-
-// =========================================================================
-// COMANDOS SERIAL
-// =========================================================================
 String bufferSerial = "";
-
-// =========================================================================
-// MODO TESTE
-// =========================================================================
 
 // =========================================================================
 // SETUP
 // =========================================================================
 
+/**
+ * @brief Inicialização do sistema.
+ *
+ * Ordem de inicialização:
+ * 1. Hardware base (LED, I2C, display, relógio)
+ * 2. Sensores (LDR, US, porta, PIR, botões)
+ * 3. RFID e áudio
+ * 4. DHT22
+ * 5. Ring buffer
+ * 6. Carregar config da NVS
+ * 7. Banner e logs
+ * 8. MQTT, OTA e NTP
+ */
 void setup()
 {
     Serial.begin(115200);
     delay(200);
 
+    // 1. Hardware base
     led.begin();
     led.selfTest();
 
@@ -498,6 +237,7 @@ void setup()
     relogio.begin();
     oled.begin();
 
+    // 2. Sensores
     ldr.begin();
     ultrassonico.begin();
     porta.begin();
@@ -505,45 +245,40 @@ void setup()
     botao.begin();
     botaoPanico.begin();
 
+    // 3. RFID e áudio
     leitorRFID.begin();
     audio.begin();
 
+    // 4. DHT22
     dht.begin();
 
-    logBuffer.begin(); // [v7.3] Inicializa o ring buffer ANTES do primeiro log
+    // 5. Ring buffer (antes do primeiro log)
+    logBuffer.begin();
 
+    // 6. Configurações da NVS
     carregarConfig();
     carregarCartoes();
 
+    // 7. Banner
     Serial.println();
     Serial.println(F("================================================="));
-    Serial.println(F("  SISTEMA DE MONITORAMENTO DE RACK - v7.3"));
-    Serial.println(F("  + Ring Buffer + HIST (auditoria em RAM)"));
-    Serial.println(F("  + OTA (ArduinoOTA)"));
-    Serial.println(F("  + NTP + RTC Sync + fallback millis"));
-    Serial.println(F("  + Tópico ambiente dedicado"));
-    Serial.println(F("  + Comandos de ambiente segregados"));
-    Serial.println(F("  + Botão de pânico com ISR (GPIO 26)"));
+    Serial.println(F("  SISTEMA DE MONITORAMENTO DE RACK - v7.4"));
+    Serial.println(F("  Modularizado + Testes Nativos"));
     Serial.println(F("================================================="));
+
     logSerial("INFO", "SISTEMA", "Sistema inicializado. Modo: " + String(alarme.modo == ARMADO ? "ARMADO" : "DESARMADO"));
-    logSerial("INFO", "RFID", "Cartao 1 Autorizado: " + CARTAO_AUTORIZADO_1);
-    logSerial("INFO", "RFID", "Cartao 2 Autorizado: " + CARTAO_AUTORIZADO_2);
-    logSerial("INFO", "RTC", relogio.disponivel() ? "RTC DS3231 ativo." : "RTC ausente (usando millis).");
-    logSerial("INFO", "VIGILANTE", "Timeout de desarme: " + String(alarme.timeoutDesarme / 60000) + " min");
-    logSerial("INFO", "VIGILANTE", "Politica: rearme BLOQUEADO se porta estiver aberta.");
-    logSerial("INFO", "PANICO", "Botao de panico no GPIO 26 (ISR, pull-up interno).");
+    logSerial("INFO", "RFID", "Cartao 1: " + CARTAO_AUTORIZADO_1);
+    logSerial("INFO", "RFID", "Cartao 2: " + CARTAO_AUTORIZADO_2);
+    logSerial("INFO", "RTC", relogio.disponivel() ? "DS3231 ativo." : "Usando millis.");
+    logSerial("INFO", "VIGILANTE", "Timeout: " + String(alarme.timeoutDesarme / 60000) + " min");
+    logSerial("INFO", "VIGILANTE", "Rearme BLOQUEADO se porta aberta.");
+    logSerial("INFO", "PANICO", "Botao no GPIO 26 (ISR).");
     logSerial("INFO", "OTA", "Hostname: " + String(OTA_HOSTNAME) + " | Porta: " + String(OTA_PORT));
     logSerial("INFO", "HIST", "Buffer de " + String(HIST_TAMANHO) + " eventos (" + String(sizeof(EventoLog) * HIST_TAMANHO) + " bytes em RAM).");
-    logSerial("INFO", "FILTROS",
-              "LDR: " + String(LDR_LIMIAR_APAGA) + "-" + String(LDR_LIMIAR_ACENDE) +
-                  " deb " + String(DEBOUNCE_LDR_MS) + "ms | US media: " + String(US_AMOSTRAS));
-    logSerial("INFO", "FILTROS",
-              "Botao: deb " + String(DEBOUNCE_BOTAO_MS) + "ms | duplo <" +
-                  String(JANELA_CLIQUE_DUPLO_MS) + "ms | longo >" + String(DURACAO_CLIQUE_LONGO_MS) + "ms");
-    logSerial("INFO", "FILTROS", "Porta: deb " + String(DEBOUNCE_PORTA_MS) + "ms");
-    logSerial("INFO", "SISTEMA", "Digite HELP no Serial para comandos disponiveis.");
+    logSerial("INFO", "SISTEMA", "Digite HELP no Serial para comandos.");
     Serial.println(F("-------------------------------------------------"));
 
+    // 8. Resetar variáveis ambientais
     alertaTempAtivo = false;
     criticoTempAtivo = false;
     alertaUmidAtivo = false;
@@ -555,51 +290,66 @@ void setup()
     _ultimaTempValida = -999.0f;
     _ultimaUmidValida = -999.0f;
 
+    // 9. MQTT
     notificador.begin();
 
+    // 10. OTA (se Wi-Fi conectado)
     if (WiFi.status() == WL_CONNECTED)
     {
         configurarOTA();
     }
     else
     {
-        logSerial("WARN", "OTA", "Wi-Fi offline no boot. OTA indisponivel ate reconectar.");
+        logSerial("WARN", "OTA", "Wi-Fi offline no boot.");
     }
 
+    // 11. NTP (se Wi-Fi conectado)
     if (WiFi.status() == WL_CONNECTED)
     {
         delay(1000);
         if (relogio.sincronizarNTP())
         {
-            logSerial("INFO", "NTP", "Sincronizacao inicial OK. Fonte: " + relogio.fonteTempoStr());
+            logSerial("INFO", "NTP", "Sync OK. Fonte: " + relogio.fonteTempoStr());
         }
         else
         {
-            logSerial("WARN", "NTP", "Sync inicial falhou. Fonte atual: " + relogio.fonteTempoStr());
+            logSerial("WARN", "NTP", "Sync falhou. Fonte: " + relogio.fonteTempoStr());
         }
     }
     else
     {
-        logSerial("WARN", "NTP", "Wi-Fi offline no boot. Fonte: " + relogio.fonteTempoStr() + " (tentara ressync no loop).");
+        logSerial("WARN", "NTP", "Wi-Fi offline. Fonte: " + relogio.fonteTempoStr());
     }
 }
 
 // =========================================================================
 // LOOP PRINCIPAL
 // =========================================================================
-unsigned long tempoUltimoBip = 0;
-unsigned long tempoUltimoPisca = 0;
-bool estadoPiscaLED = false;
 
-unsigned long tempoUltimoSalvamento = 0;
-constexpr unsigned long INTERVALO_SALVAMENTO_MS = 60000UL;
-
+/**
+ * @brief Loop principal do sistema.
+ *
+ * Ordem de execução:
+ * 1. OTA (prioridade máxima)
+ * 2. Comandos Serial
+ * 3. Sensores contínuos (LDR, US, porta, PIR)
+ * 4. Eventos (botão, pânico, RFID)
+ * 5. Máquina de estados (Alarme)
+ * 6. Alarme ambiental (DHT)
+ * 7. Ações pendentes
+ * 8. Display
+ * 9. Áudio
+ * 10. LED
+ * 11. MQTT
+ * 12. Ressincronização NTP
+ * 13. Salvamento periódico
+ */
 void loop()
 {
     // 0. OTA
     ArduinoOTA.handle();
 
-    // 1. Serial
+    // 1. Comandos Serial
     while (Serial.available())
     {
         char c = Serial.read();
@@ -648,7 +398,7 @@ void loop()
         _ultimaTempValida = tempAtual;
     if (umidAtual != -999.0f)
         _ultimaUmidValida = umidAtual;
-    _verificarAmbiente(tempAtual, umidAtual);
+    verificarAmbiente(tempAtual, umidAtual);
 
     // 6. Ações pendentes
     if (alarme.audioPararPendente)
@@ -697,7 +447,7 @@ void loop()
                            alarme.uidUltimoRearme);
     }
 
-    // 8. Áudio com prioridade
+    // 8. Áudio
     EstadoSistema estadoParaAudio = (alarme.modo == ARMADO) ? alarme.estadoAtual : SEGURO;
     bool bloqueioParaAudio = (alarme.modo == ARMADO) ? alarme.bloqueioAtivo() : false;
     audio.tocar(estadoParaAudio, bloqueioParaAudio, estadoAmbiental);
@@ -709,10 +459,10 @@ void loop()
     // 10. MQTT
     notificador.update();
 
-    // 10.1 Ressincronização periódica NTP
+    // 11. Ressincronização NTP
     relogio.talvezRessincronizar();
 
-    // 11. Salvamento periódico apenas se dirty
+    // 12. Salvamento periódico
     if (contadoresDirty && millis() - tempoUltimoSalvamento > INTERVALO_SALVAMENTO_MS)
     {
         tempoUltimoSalvamento = millis();
