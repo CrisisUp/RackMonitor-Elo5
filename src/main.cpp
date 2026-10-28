@@ -164,11 +164,6 @@ std::vector<String> cartoesAutorizados;
 // =========================================================================
 // PERIFÉRICOS
 // =========================================================================
-Adafruit_SSD1306 display(LARGURA_TELA, ALTURA_TELA, &Wire, -1);
-RTC_DS3231 rtc;
-MFRC522 rfid(Pins::RFID_SS, Pins::RFID_RST);
-
-bool rtcDisponivel = false;
 
 Preferences prefs;
 
@@ -459,50 +454,6 @@ void _verificarAmbiente(float temp, float umid)
         }
     }
 #endif
-}
-
-// =========================================================================
-// HELPER JSON
-// =========================================================================
-
-String jsonEscape(const String &in)
-{
-    String out;
-    out.reserve(in.length() + 8);
-    for (size_t i = 0; i < in.length(); i++)
-    {
-        char c = in[i];
-        switch (c)
-        {
-        case '"':
-            out += "\\\"";
-            break;
-        case '\\':
-            out += "\\\\";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        default:
-            if ((uint8_t)c < 0x20)
-            {
-                char buf[7];
-                snprintf(buf, sizeof(buf), "\\u%04x", (uint8_t)c);
-                out += buf;
-            }
-            else
-            {
-                out += c;
-            }
-        }
-    }
-    return out;
 }
 
 // =========================================================================

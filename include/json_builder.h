@@ -1,64 +1,8 @@
 #pragma once
-
-#ifdef NATIVE_TEST
-// ==========================================
-// MOCKS PARA O AMBIENTE NATIVE (PC)
-// ==========================================
-#include <string>
-#include <cstdio>
-#include <cstring>
-
-// Simula a classe String do Arduino usando std::string
-class String
-{
-public:
-    std::string s;
-    String() {}
-    String(const char *c) : s(c) {}
-    String(const std::string &str) : s(str) {}
-    String(float f, int decimals)
-    {
-        char buf[32];
-        snprintf(buf, sizeof(buf), "%.*f", decimals, f);
-        s = buf;
-    }
-    String(int i) : s(std::to_string(i)) {}
-    String(unsigned int i) : s(std::to_string(i)) {}
-    String(long l) : s(std::to_string(l)) {}
-
-    String &operator+=(const String &other)
-    {
-        s += other.s;
-        return *this;
-    }
-    String &operator+=(const char *c)
-    {
-        s += c;
-        return *this;
-    }
-    bool operator==(const String &other) const { return s == other.s; }
-
-    size_t length() const { return s.length(); }
-    char operator[](size_t i) const { return s[i]; }
-    const char *c_str() const { return s.c_str(); }
-
-    // Busca substring (usado nos testes)
-    int indexOf(const String &str) const
-    {
-        size_t pos = s.find(str.s);
-        return (pos == std::string::npos) ? -1 : (int)pos;
-    }
-};
-
-#else
-// ==========================================
-// AMBIENTE ESP32 (Arduino real)
-// ==========================================
-#include <Arduino.h>
-#endif
+#include "arduino_stubs.h"
 
 // ==========================================
-// ESTRUTURA E FUNÇÃO (comum aos dois)
+// ESTRUTURA E FUNÇÃO
 // ==========================================
 struct DadosJSON
 {
@@ -134,4 +78,44 @@ inline String gerarJSON(const DadosJSON &d)
     p += String(d.umid_pct, 1);
     p += "}";
     return p;
+}
+
+inline String jsonEscape(const String &in)
+{
+    String out;
+    out.reserve(in.length() + 8);
+    for (size_t i = 0; i < in.length(); i++)
+    {
+        char c = in[i];
+        switch (c)
+        {
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            if ((uint8_t)c < 0x20)
+            {
+                char buf[7];
+                snprintf(buf, sizeof(buf), "\\u%04x", (uint8_t)c);
+                out += buf;
+            }
+            else
+            {
+                out += c;
+            }
+        }
+    }
+    return out;
 }

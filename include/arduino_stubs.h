@@ -9,19 +9,15 @@
 #include <cstring>
 #include <cstdint>
 
-// Simula o millis() do Arduino
 static unsigned long _simulated_millis = 0;
 inline unsigned long millis()
 {
     _simulated_millis += 10;
     return _simulated_millis;
 }
-
-// Simula as interrupções
 inline void noInterrupts() {}
 inline void interrupts() {}
 
-// Simula a classe String do Arduino
 class String : public std::string
 {
 public:
@@ -29,7 +25,6 @@ public:
     String(const char *s) : std::string(s) {}
     String(const std::string &s) : std::string(s) {}
 
-    // Construtor para float com casas decimais (ex: String(18.5, 1) -> "18.5")
     String(float f, int decimals)
     {
         char buf[32];
@@ -37,10 +32,13 @@ public:
         this->assign(buf);
     }
 
-    // Construtor para inteiros
     String(int i) : std::string(std::to_string(i)) {}
     String(unsigned int i) : std::string(std::to_string(i)) {}
     String(long l) : std::string(std::to_string(l)) {}
+
+    // --- ADICIONE ESTA LINHA ---
+    void reserve(size_t n) { std::string::reserve(n); }
+    // ---------------------------
 
     String &operator+=(const String &other)
     {
@@ -58,7 +56,6 @@ public:
     char operator[](size_t i) const { return std::string::operator[](i); }
     const char *c_str() const { return std::string::c_str(); }
 
-    // Simula o indexOf do Arduino
     int indexOf(const String &str) const
     {
         size_t pos = this->find(str);
@@ -67,8 +64,5 @@ public:
 };
 
 #else
-// =========================================================================
-// AMBIENTE ESP32 (Arduino real)
-// =========================================================================
 #include <Arduino.h>
 #endif
