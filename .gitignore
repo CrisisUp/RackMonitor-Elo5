@@ -16,3 +16,5 @@
 # (Opcional) Se você for colocar senhas reais no main.cpp,
 # remova o comentário da linha abaixo para não vazar pro GitHub
 # src/main.cpp
+
+.markdownlint.json
