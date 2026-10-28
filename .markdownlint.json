@@ -1,0 +1,6 @@
+{
+  "MD033": {
+    "allowed_elements": ["details", "summary", "br", "hr", "img", "input", "area", "base", "col", "command", "embed", "keygen", "link", "meta", "param", "source", "track", "wbr", "mark", "ruby", "rt", "rp", "bdi", "bdo", "data", "time", "progress", "meter", "kdb", "var", "sub", "sup", "i", "b", "u", "small", "strong", "em", "abbr", "cite", "q", "dfn", "code", "pre", "kbd", "samp", "var", "sub", "sup", "i", "b", "u", "small", "strong", "em", "abbr", "cite", "q", "dfn", "code", "pre"]
+  },
+  "MD013": false
+}
