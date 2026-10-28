@@ -126,14 +126,14 @@ void Audio::tocar(EstadoSistema estado, bool bloqueioAtivo, EstadoAmbiental ambi
                 _tempoUltimoBip = agora;
             }
         }
-        else if (ambiente == AMB_ALERTA)
+        /*else if (ambiente == AMB_ALERTA)
         {
             if (agora - _tempoUltimoBip >= 8000)
             {
                 tone(Pins::BUZZER_E, 700, 150);
                 _tempoUltimoBip = agora;
             }
-        }
+        }*/
         break;
 
     case 0:

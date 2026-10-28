@@ -10,20 +10,21 @@ void LedRGB::begin()
 
 void LedRGB::definirCor(int r, int g, int b)
 {
-    ledcWrite(Pins::LED_R, 255 - constrain(r, 0, 255));
-    ledcWrite(Pins::LED_G, 255 - constrain(g, 0, 255));
-    ledcWrite(Pins::LED_B, 255 - constrain(b, 0, 255));
+    // Catodo comum: valor direto (0 = apagado, 255 = brilho máximo)
+    ledcWrite(Pins::LED_R, constrain(r, 0, 255));
+    ledcWrite(Pins::LED_G, constrain(g, 0, 255));
+    ledcWrite(Pins::LED_B, constrain(b, 0, 255));
 }
 
 void LedRGB::selfTest()
 {
-    definirCor(255, 0, 0);
+    definirCor(255, 0, 0); // vermelho
     delay(150);
-    definirCor(0, 255, 0);
+    definirCor(0, 255, 0); // verde
     delay(150);
-    definirCor(0, 0, 255);
+    definirCor(0, 0, 255); // azul
     delay(150);
-    definirCor(0, 0, 0);
+    definirCor(0, 0, 0); // apagado
 }
 
 void LedRGB::atualizar(ModoVigilante modo, EstadoSistema estado,
@@ -35,7 +36,7 @@ void LedRGB::atualizar(ModoVigilante modo, EstadoSistema estado,
     if (bloqueioAtivo)
     {
         if ((agora / 250) % 2 == 0)
-            definirCor(255, 200, 0);
+            definirCor(255, 200, 0); // amarelo piscando
         else
             definirCor(0, 0, 0);
         return;
@@ -43,6 +44,7 @@ void LedRGB::atualizar(ModoVigilante modo, EstadoSistema estado,
 
     if (modo == DESARMADO)
     {
+        // Azul pulsante (respiração)
         float fase = (agora % 2000) / 2000.0f;
         int brilho = (int)(127.5f * (1.0f + sin(fase * 2.0f * PI)));
         definirCor(0, 0, brilho);
@@ -53,13 +55,13 @@ void LedRGB::atualizar(ModoVigilante modo, EstadoSistema estado,
     {
     case SEGURO:
     case ACESSO_RFID:
-        definirCor(0, 255, 0);
+        definirCor(0, 255, 0); // verde (tudo OK)
         break;
     case AVISO_SALA:
-        definirCor(255, 200, 0);
+        definirCor(255, 200, 0); // amarelo
         break;
     case APROXIMACAO_RACK:
-        definirCor(255, 100, 0);
+        definirCor(255, 100, 0); // laranja
         break;
     case INVASAO_SALA:
         if (agora - tempoUltimoPisca >= 250)
@@ -67,10 +69,10 @@ void LedRGB::atualizar(ModoVigilante modo, EstadoSistema estado,
             estadoPisca = !estadoPisca;
             tempoUltimoPisca = agora;
         }
-        definirCor(estadoPisca ? 255 : 0, 0, 0);
+        definirCor(estadoPisca ? 255 : 0, 0, 0); // vermelho piscando
         break;
     case EMERGENCIA_RACK:
-        definirCor(255, 0, 0);
+        definirCor(255, 0, 0); // vermelho fixo
         break;
     }
 }

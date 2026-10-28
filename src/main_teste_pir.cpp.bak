@@ -1,0 +1,137 @@
+#include <Arduino.h>
+
+#define PIR_PIN 27
+#define DEBOUNCE_MS 200
+#define RETENCAO_MS 5000
+#define WARMUP_MS 60000
+#define INTERVALO_LOG_MS 1000
+
+unsigned long tempoInicio = 0;
+unsigned long tempoUltimaMudancaBruta = 0;
+unsigned long tempoUltimaDeteccao = 0;
+unsigned long tempoUltimoLog = 0;
+
+bool brutoAnterior = false;
+bool brutoFiltrado = false;
+bool movimento = false;
+
+int contadorDeteccoes = 0;
+
+const char *nomeEstado(bool v)
+{
+  return v ? "HIGH (movimento)" : "LOW  (sem movimento)";
+}
+
+void setup()
+{
+  Serial.begin(115200);
+  delay(1000);
+  pinMode(PIR_PIN, INPUT);
+
+  Serial.println();
+  Serial.println(F("=========================================="));
+  Serial.println(F("  TESTE AVANCADO DO PIR (HC-SR501)"));
+  Serial.println(F("=========================================="));
+  Serial.print(F("Pino: GPIO "));
+  Serial.println(PIR_PIN);
+  Serial.print(F("Warm-up: "));
+  Serial.print(WARMUP_MS / 1000);
+  Serial.println(F(" s"));
+  Serial.print(F("Debounce: "));
+  Serial.print(DEBOUNCE_MS);
+  Serial.println(F(" ms"));
+  Serial.print(F("Retencao: "));
+  Serial.print(RETENCAO_MS);
+  Serial.println(F(" ms"));
+  Serial.println(F("------------------------------------------"));
+  Serial.println(F("Aguardando calibracao do sensor..."));
+  Serial.println(F("NAO se mova na frente do sensor."));
+  Serial.println(F("=========================================="));
+
+  tempoInicio = millis();
+  tempoUltimaMudancaBruta = millis();
+}
+
+void loop()
+{
+  unsigned long agora = millis();
+
+  // 1. Warm-up: durante a calibração, ignora o sensor
+  if (agora - tempoInicio < WARMUP_MS)
+  {
+    if (agora - tempoUltimoLog >= INTERVALO_LOG_MS)
+    {
+      tempoUltimoLog = agora;
+      unsigned long restante = (WARMUP_MS - (agora - tempoInicio)) / 1000;
+      Serial.print(F("[WARMUP] Calibrando... faltam "));
+      Serial.print(restante);
+      Serial.println(F(" s"));
+    }
+    delay(100);
+    return;
+  }
+
+  // 2. Leitura bruta
+  bool bruto = (digitalRead(PIR_PIN) == HIGH);
+
+  // 3. Detecta mudança bruta e aplica debounce
+  if (bruto != brutoAnterior)
+  {
+    tempoUltimaMudancaBruta = agora;
+    brutoAnterior = bruto;
+  }
+
+  if ((agora - tempoUltimaMudancaBruta) >= DEBOUNCE_MS)
+  {
+    if (bruto && !brutoFiltrado)
+    {
+      // Transição LOW -> HIGH confirmada
+      brutoFiltrado = true;
+      movimento = true;
+      tempoUltimaDeteccao = agora;
+      contadorDeteccoes++;
+      Serial.print(F("[DETECCAO] #"));
+      Serial.print(contadorDeteccoes);
+      Serial.print(F(" as "));
+      Serial.print(agora / 1000.0, 1);
+      Serial.println(F(" s"));
+    }
+    else if (!bruto && brutoFiltrado)
+    {
+      // Transição HIGH -> LOW confirmada
+      brutoFiltrado = false;
+      Serial.println(F("[SENSOR]  Sinal voltou a LOW (aguardando retencao)"));
+    }
+  }
+
+  // 4. Retenção: mantém "movimento" ativo por RETENCAO_MS após a última detecção
+  if (movimento && (agora - tempoUltimaDeteccao) >= RETENCAO_MS)
+  {
+    movimento = false;
+    Serial.println(F("[ESTADO]  Movimento encerrado (retencao expirou)"));
+  }
+
+  // 5. Log periódico do estado
+  if (agora - tempoUltimoLog >= INTERVALO_LOG_MS)
+  {
+    tempoUltimoLog = agora;
+    Serial.print(F("[STATUS] "));
+    Serial.print(F("raw="));
+    Serial.print(nomeEstado(bruto));
+    Serial.print(F(" | filtrado="));
+    Serial.print(brutoFiltrado ? "HIGH" : "LOW ");
+    Serial.print(F(" | movimento="));
+    Serial.print(movimento ? "SIM" : "nao");
+    Serial.print(F(" | deteccoes="));
+    Serial.print(contadorDeteccoes);
+    if (movimento)
+    {
+      Serial.print(F(" | retencao="));
+      Serial.print((RETENCAO_MS - (agora - tempoUltimaDeteccao)) / 1000.0, 1);
+      Serial.print(F("s"));
+    }
+    Serial.println();
+  }
+
+  delay(20);
+}

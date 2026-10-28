@@ -1,9 +1,9 @@
-# PlatformIO
+# PlatformIO (build e dependências)
 .pio/
 .pioenvs/
 .piolibdeps/
 
-# VS Code
+# VS Code (configurações locais)
 .vscode/
 
 # macOS
@@ -13,8 +13,13 @@
 *.log
 *.tmp
 
-# (Opcional) Se você for colocar senhas reais no main.cpp,
-# remova o comentário da linha abaixo para não vazar pro GitHub
+# ============================================================
+# SEGREDOS (NUNCA COMMITAR)
+# ============================================================
+include/secrets.h
+
+# Se você colocar senhas no main.cpp, descomente a linha abaixo
 # src/main.cpp
 
+# Configurações locais (opcional)
 .markdownlint.json

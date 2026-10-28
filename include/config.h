@@ -1,16 +1,15 @@
 #pragma once
 #include <cstdint>
+#include "secrets.h"
 
 // =========================================================================
 // MAPEAMENTO DE HARDWARE
 // =========================================================================
 namespace Pins
 {
-    constexpr uint8_t RFID_SS = 5;
-    constexpr uint8_t RFID_RST = 4;
-    constexpr uint8_t RFID_SCK = 18;
-    constexpr uint8_t RFID_MISO = 19;
-    constexpr uint8_t RFID_MOSI = 23;
+    // --- RFID (PN532 via I2C) ---
+    constexpr uint8_t RFID_SDA = 21;
+    constexpr uint8_t RFID_SCL = 22;
 
     constexpr uint8_t PIR = 27;
     constexpr uint8_t TRIG = 17;
@@ -25,9 +24,12 @@ namespace Pins
 
     constexpr uint8_t LED_R = 32;
     constexpr uint8_t LED_G = 33;
-    constexpr uint8_t LED_B = 0;
+    constexpr uint8_t LED_B = 12;
 
     constexpr uint8_t BOTAO_PANICO = 26;
+
+    // --- DHT22 ---
+    constexpr uint8_t DHT_PIN = 13;
 }
 
 // =========================================================================
@@ -54,6 +56,15 @@ constexpr unsigned long DEBOUNCE_PORTA_MS = 200;
 constexpr unsigned long DURACAO_AVISO_BLOQUEIO_MS = 4000;
 
 // =========================================================================
+// DHT22
+// =========================================================================
+// O tipo DHT22 vem da biblioteca DHT sensor library (enum DHT22).
+// Para evitar conflito, definimos aqui como constante e usamos no sensor_dht.cpp.
+// (Se preferir, use #define DHT_TYPE DHT22 no sensor_dht.h.)
+constexpr uint8_t DHT_TYPE = 22; // 22 = DHT22 (enum da lib)
+constexpr unsigned long DHT_INTERVALO_MIN_MS = 2000UL;
+
+// =========================================================================
 // LIMITES AMBIENTAIS (DEFAULT)
 // =========================================================================
 constexpr float TEMP_ALERTA_C_DEFAULT = 30.0f;
@@ -70,10 +81,6 @@ constexpr unsigned long INTERVALO_AMOSTRA_TAXA_MS = 60000UL;
 // =========================================================================
 // CONFIGURAÇÃO DE REDE E PROTOCOLOS
 // =========================================================================
-const char *const WIFI_SSID = "Wokwi-GUEST";
-const char *const WIFI_PASSWORD = "";
-const char *const MQTT_BROKER = "broker.emqx.io";
-const int MQTT_PORT = 1883;
 
 const char *const MQTT_TOPIC_STATUS = "rack_monitor_ABCD1234/status";
 const char *const MQTT_TOPIC_LWT = "rack_monitor_ABCD1234/status/lwt";

@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rack Monitor - Dashboard</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-color: #12151e;
+            --card-bg: #1e222b;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --color-success: #10b981;
+            --color-info: #3b82f6;
+            --color-warning: #f59e0b;
+            --color-danger: #ef4444;
+            --color-neutral: #e2e8f0;
+            --border-color: #334155;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo-area {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-badge {
+            background-color: var(--color-info);
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 6px;
+            letter-spacing: 1px;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--color-danger);
+            transition: background-color 0.3s;
+        }
+
+        .dot.online {
+            background-color: var(--color-success);
+            box-shadow: 0 0 10px var(--color-success);
+        }
+
+        .grid-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1.25rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .card-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .card-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--color-neutral);
+            word-break: break-word;
+            overflow-wrap: break-word;
+        }
+
+        .card-value.large {
+            font-size: 1.5rem;
+        }
+
+        .text-success {
+            color: var(--color-success);
+        }
+
+        .text-info {
+            color: var(--color-info);
+        }
+
+        .text-warning {
+            color: var(--color-warning);
+        }
+
+        .text-danger {
+            color: var(--color-danger);
+        }
+
+        .text-neutral {
+            color: var(--color-neutral);
+        }
+
+        .card-border-success {
+            border-color: var(--color-success);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+        }
+
+        .card-border-danger {
+            border-color: var(--color-danger);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.2);
+        }
+
+        .card-border-warning {
+            border-color: var(--color-warning);
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        button {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            color: white;
+        }
+
+        button:hover:not(:disabled) {
+            opacity: 0.9;
+        }
+
+        button:active:not(:disabled) {
+            transform: scale(0.98);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-armar {
+            background-color: var(--color-info);
+        }
+
+        .btn-desarmar {
+            background-color: var(--color-warning);
+        }
+
+        .btn-teste {
+            background-color: #475569;
+        }
+
+        .btn-reset {
+            background-color: #475569;
+        }
+
+        .btn-refresh {
+            background-color: #0e7490;
+        }
+
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .box-container {
+            background-color: #0f111a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            min-height: 150px;
+            margin-bottom: 2rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .placeholder-text {
+            font-size: 0.85rem;
+            color: #475569;
+            font-style: italic;
+        }
+
+        .log-item {
+            font-size: 0.85rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #1e293b;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .log-item:last-child {
+            border-bottom: none;
+        }
+
+        .chart-container {
+            background-color: #0f111a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            height: 300px;
+        }
+
+        footer {
+            text-align: center;
+            font-size: 0.75rem;
+            color: #475569;
+            margin-top: 2rem;
+            padding-top: 2rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .hmac-note {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid var(--color-warning);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: var(--color-warning);
+        }
+
+        .hmac-note code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.25rem;
+            }
+
+            .grid-cards {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            .card-value {
+                font-size: 1.1rem;
+            }
+
+            .controls button {
+                flex: 1 1 100%;
+                justify-content: center;
+            }
+
+            .chart-container {
+                height: 220px;
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container">
+        <header>
+            <div class="logo-area">
+                <span class="logo-badge">RACK</span>
+                <h1>Rack Monitor</h1>
+            </div>
+            <div class="status-indicator">
+                <span title="Conexão com o broker MQTT">
+                    🌐 <span id="connection-text">Offline</span>
+                    <span id="connection-dot" class="dot"></span>
+                </span>
+                <span style="margin: 0 12px; color: var(--border-color);">|</span>
+                <span title="Sinal de vida do ESP32">
+                    💓 ESP32: <span id="heartbeat-status" style="color: var(--text-muted);">--</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- ============================================================ -->
+        <!-- AVISO DE CHAVE HMAC -->
+        <!-- ============================================================ -->
+        <div class="hmac-note" id="hmacNote">
+            ⚠️ <strong>Chave HMAC não configurada.</strong> Os comandos ARMAR/DESARMAR/RESET serão rejeitados pelo
+            ESP32.<br>
+            Cole a chave gerada no boot do ESP32:
+            <input type="text" id="hmacKeyInput" placeholder="cole a chave HMAC aqui"
+                style="padding:6px 10px;border-radius:4px;border:1px solid #444;background:#111;color:#fff;margin-left:8px;width:320px;font-family:monospace">
+            <button onclick="salvarChave()"
+                style="padding:6px 14px;background:var(--color-success);color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:8px">Salvar</button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- CARDS DE STATUS -->
+        <!-- ============================================================ -->
+        <div class="grid-cards">
+            <div class="card">
+                <span class="card-label">Modo de Operação</span>
+                <span id="modo" class="card-value">--</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Status do Perímetro</span>
+                <span id="estado" class="card-value">--</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Acesso Físico</span>
+                <span id="porta" class="card-value">--</span>
+            </div>
+            <div class="card">
+                <span class="card-label">IP do ESP32</span>
+                <span id="ip" class="card-value">--</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Último UID</span>
+                <span id="uid" class="card-value">--</span>
+            </div>
+        </div>
+
+        <div class="grid-cards">
+            <div class="card">
+                <span class="card-label">Acessos RFID</span>
+                <span id="acessos" class="card-value large">0</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Invasões</span>
+                <span id="invasoes" class="card-value large">0</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Rearmes Bloqueados</span>
+                <span id="bloqueios" class="card-value large">0</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Temperatura</span>
+                <span id="temperatura" class="card-value large">--</span>
+            </div>
+            <div class="card">
+                <span class="card-label">Umidade</span>
+                <span id="umidade" class="card-value large">--</span>
+            </div>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- BOTÕES DE CONTROLE -->
+        <!-- ============================================================ -->
+        <div class="controls">
+            <button id="btn-armar" class="btn-armar" onclick="enviarComando('ARMAR')">🔒 Armar</button>
+            <button id="btn-desarmar" class="btn-desarmar" onclick="enviarComando('DESARMAR')">🔓 Desarmar</button>
+            <button id="btn-teste" class="btn-teste" onclick="enviarComando('TESTE')">🔧 Modo Teste</button>
+            <button class="btn-reset" onclick="enviarReset()">🔄 Reset</button>
+            <button class="btn-refresh" onclick="forcarAtualizacao()">📡 Atualizar agora</button>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- GRÁFICO -->
+        <!-- ============================================================ -->
+        <div class="section-title">Histórico de Distância e Temperatura (últimos 5 min)</div>
+        <div class="chart-container">
+            <canvas id="graficoDistancia"></canvas>
+        </div>
+
+        <!-- ============================================================ -->
+        <!-- LOGS -->
+        <!-- ============================================================ -->
+        <div class="section-title">Últimos eventos</div>
+        <div class="box-container" id="log-eventos">
+            <span class="placeholder-text">Aguardando eventos...</span>
+        </div>
+
+        <div class="section-title">Histórico de status</div>
+        <div class="box-container" id="log-historico">
+            <span class="placeholder-text">Aguardando dados do ESP32...</span>
+        </div>
+
+        <footer>Rack Monitor v7.5 · Wokwi + MQTTX + HMAC-SHA256 · broker público (sem autenticação)</footer>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURAÇÃO — TROQUE O PREFIXO POR UM VALOR ÚNICO SEU!
+        // ============================================================
+        const TOPIC_PREFIX = 'rack_monitor_ABCD1234';
+        const topicStatus = TOPIC_PREFIX + '/status';
+        const topicLWT = TOPIC_PREFIX + '/status/lwt';
+        const topicComando = TOPIC_PREFIX + '/comando';
+        const topicComandoAmbiente = TOPIC_PREFIX + '/comando/ambiente';
+        const topicLogs = TOPIC_PREFIX + '/logs';
+        const topicHeartbeat = TOPIC_PREFIX + '/heartbeat';
+
+        const brokerUrl = 'wss://broker.emqx.io:8084/mqtt';
+        const RESET_TOKEN = 'rack2026';
+
+        // Chave HMAC (carregada do localStorage ou digitada pelo usuário)
+        let HMAC_KEY = localStorage.getItem('hmac_key') || '';
+
+        let client;
+        let aguardandoConfirmacao = false;
+        let comandoEnviado = null;
+        let notificacaoJaDisparada = false;
+        let heartbeatTimer = null;
+
+        // Gráfico
+        let grafico = null;
+        const MAX_PONTOS = 60;
+        const STORAGE_KEY = 'rackMonitorHistorico';
+
+        // ============================================================
+        // NOTIFICAÇÃO NO NAVEGADOR
+        // ============================================================
+        function pedirPermissaoNotificacao() {
+            if (!("Notification" in window)) return;
+            if (Notification.permission === "default") {
+                Notification.requestPermission();
+            }
+        }
+
+        function notificar(titulo, corpo) {
+            if (!("Notification" in window)) return;
+            if (Notification.permission !== "granted") return;
+            new Notification(titulo, {
+                body: corpo,
+                icon: "https://cdn-icons-png.flaticon.com/512/564/564619.png"
+            });
+        }
+
+        // ============================================================
+        // PERSISTÊNCIA DO HISTÓRICO
+        // ============================================================
+        function carregarHistorico() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (!raw) return { tempo: [], dist: [], temp: [] };
+                const obj = JSON.parse(raw);
+                return {
+                    tempo: obj.tempo || [],
+                    dist: obj.dist || [],
+                    temp: obj.temp || []
+                };
+            } catch (e) {
+                return { tempo: [], dist: [], temp: [] };
+            }
+        }
+
+        function salvarHistorico(tempo, dist, temp) {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    tempo: tempo.slice(-MAX_PONTOS),
+                    dist: dist.slice(-MAX_PONTOS),
+                    temp: temp.slice(-MAX_PONTOS)
+                }));
+            } catch (e) { }
+        }
+
+        // ============================================================
+        // GRÁFICO
+        // ============================================================
+        function inicializarGrafico() {
+            const hist = carregarHistorico();
+            const ctx = document.getElementById('graficoDistancia').getContext('2d');
+
+            grafico = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: hist.tempo,
+                    datasets: [
+                        {
+                            label: 'Distância (cm)',
+                            data: hist.dist,
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Temperatura (°C)',
+                            data: hist.temp,
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            fill: false,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            suggestedMax: 250,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' },
+                            title: { display: true, text: 'Distância (cm)', color: '#94a3b8' }
+                        },
+                        y1: {
+                            position: 'right',
+                            beginAtZero: false,
+                            suggestedMin: 10,
+                            suggestedMax: 50,
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#94a3b8' },
+                            title: { display: true, text: 'Temperatura (°C)', color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8', maxTicksLimit: 6 }
+                        }
+                    },
+                    plugins: { legend: { labels: { color: '#e2e8f0' } } }
+                }
+            });
+        }
+
+        function atualizarGrafico(distancia, temperatura) {
+            if (!grafico) return;
+            if (distancia === null || distancia === undefined ||
+                temperatura === null || temperatura === undefined) return;
+            if (temperatura === -999) temperatura = null;
+
+            const agora = new Date().toLocaleTimeString('pt-BR');
+            const labels = grafico.data.labels;
+            const d1 = grafico.data.datasets[0].data;
+            const d2 = grafico.data.datasets[1].data;
+
+            labels.push(agora);
+            d1.push(distancia);
+            d2.push(temperatura);
+
+            if (labels.length > MAX_PONTOS) {
+                labels.shift();
+                d1.shift();
+                d2.shift();
+            }
+
+            grafico.update('none');
+            salvarHistorico(labels, d1, d2);
+        }
+
+        // ============================================================
+        // HMAC — ASSINATURA DE COMANDOS
+        // ============================================================
+        async function assinarComando(cmd, token = null) {
+            if (!HMAC_KEY) {
+                alert("Chave HMAC não configurada. Cole a chave no campo amarelo.");
+                throw new Error("HMAC key not set");
+            }
+
+            // CORRIGIDO: timestamp em UTC (sem subtrair fuso horário)
+            const ts = Math.floor(Date.now() / 1000) - (3 * 3600);
+            const payload = `${cmd}|${ts}`;
+
+            const enc = new TextEncoder();
+            const keyBytes = enc.encode(HMAC_KEY);
+            const payloadBytes = enc.encode(payload);
+
+            const cryptoKey = await crypto.subtle.importKey(
+                "raw", keyBytes,
+                { name: "HMAC", hash: "SHA-256" },
+                false, ["sign"]
+            );
+
+            const signature = await crypto.subtle.sign("HMAC", cryptoKey, payloadBytes);
+            const sigHex = Array.from(new Uint8Array(signature))
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('')
+                .toUpperCase();
+
+            if (cmd === "RESET" && token) {
+                return `RESET|${ts}|${sigHex}|${token}`;
+            }
+            return `${cmd}|${ts}|${sigHex}`;
+        }
+
+        // ============================================================
+        // CONEXÃO MQTT
+        // ============================================================
+        function conectar() {
+            pedirPermissaoNotificacao();
+            inicializarGrafico();
+
+            const clientId = 'WebDash-' + Math.random().toString(16).substr(2, 8);
+            client = mqtt.connect(brokerUrl, {
+                clientId: clientId,
+                reconnectPeriod: 5000,
+                connectTimeout: 10000,
+                clean: true
+            });
+
+            client.on('connect', () => {
+                console.log('[MQTT] Conectado ao broker');
+                document.getElementById('connection-dot').classList.add('online');
+                document.getElementById('connection-text').innerText = 'Online';
+
+                client.subscribe(topicStatus);
+                client.subscribe(topicLWT);
+                client.subscribe(topicLogs);
+                client.subscribe(topicHeartbeat);
+
+                setTimeout(() => {
+                    if (client && client.connected) {
+                        client.publish(topicComando, 'STATUS');
+                    }
+                }, 500);
+            });
+
+            client.on('reconnect', () => {
+                document.getElementById('connection-text').innerText = 'Reconectando...';
+                document.getElementById('connection-dot').classList.remove('online');
+            });
+
+            client.on('error', (err) => console.error('[MQTT] Erro:', err));
+
+            client.on('close', () => {
+                document.getElementById('connection-dot').classList.remove('online');
+                document.getElementById('connection-text').innerText = 'Offline';
+            });
+
+            client.on('message', (topic, message) => {
+                const texto = message.toString();
+
+                if (topic === topicStatus) {
+                    try {
+                        const data = JSON.parse(texto);
+                        if (!data.status) {
+                            atualizarTela(data);
+                            confirmarComandoSeAplicavel(data);
+                        }
+                    } catch (e) {
+                        console.error('Erro ao parsear status:', e, texto);
+                    }
+                }
+                else if (topic === topicLWT) {
+                    try {
+                        const lwt = JSON.parse(texto);
+                        if (lwt.status === 'offline') {
+                            document.getElementById('heartbeat-status').innerText = 'OFFLINE (LWT)';
+                            document.getElementById('heartbeat-status').style.color = '#ef4444';
+                            notificar("⚠️ ESP32 OFFLINE (LWT)", "O broker detectou queda do dispositivo.");
+                        } else if (lwt.status === 'online') {
+                            document.getElementById('heartbeat-status').innerText = 'Online (LWT)';
+                            document.getElementById('heartbeat-status').style.color = '#10b981';
+                        }
+                    } catch (e) { }
+                }
+                else if (topic === topicLogs) {
+                    try {
+                        const logData = JSON.parse(texto);
+                        const isHistorico = logData.msg && logData.msg.startsWith("Estado alterado:");
+                        adicionarLog(logData.msg || texto, logData.ts, isHistorico);
+                    } catch (e) {
+                        adicionarLog(texto, null, false);
+                    }
+                }
+                else if (topic === topicHeartbeat) {
+                    const hbEl = document.getElementById('heartbeat-status');
+                    hbEl.innerText = 'OK (' + new Date().toLocaleTimeString('pt-BR') + ')';
+                    hbEl.style.color = '#10b981';
+
+                    if (heartbeatTimer) clearTimeout(heartbeatTimer);
+                    heartbeatTimer = setTimeout(() => {
+                        hbEl.innerText = 'PERDIDO!';
+                        hbEl.style.color = '#ef4444';
+                        notificar("⚠️ ESP32 OFFLINE!", "O dispositivo parou de enviar heartbeat há 60s.");
+                    }, 60000);
+                }
+            });
+        }
+
+        // ============================================================
+        // FEEDBACK DE COMANDOS
+        // ============================================================
+        function desabilitarBotoes(desabilitar) {
+            ['btn-armar', 'btn-desarmar', 'btn-teste'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.disabled = desabilitar;
+            });
+        }
+
+        function confirmarComandoSeAplicavel(data) {
+            if (!aguardandoConfirmacao || !comandoEnviado) return;
+
+            let confirmado = false;
+            if (comandoEnviado === 'ARMAR' && data.modo === 'ARMADO') confirmado = true;
+            if (comandoEnviado === 'DESARMAR' && data.modo === 'DESARMADO') confirmado = true;
+
+            if (confirmado) {
+                aguardandoConfirmacao = false;
+                comandoEnviado = null;
+                desabilitarBotoes(false);
+            }
+        }
+
+        // ============================================================
+        // ATUALIZAÇÃO DA TELA
+        // ============================================================
+        function atualizarTela(data) {
+            document.getElementById('modo').innerText = data.modo || '--';
+            document.getElementById('porta').innerText = data.porta ? 'Aberta' : 'Fechada';
+            document.getElementById('uid').innerText = data.uid || '--';
+            document.getElementById('ip').innerText = data.ip || '--';
+
+            document.getElementById('acessos').innerText = data.acessos || 0;
+            document.getElementById('invasoes').innerText = data.invasoes || 0;
+            document.getElementById('bloqueios').innerText = data.rearmes || 0;
+
+            const elTemp = document.getElementById('temperatura');
+            const elUmid = document.getElementById('umidade');
+
+            if (data.temp_c !== undefined && data.temp_c !== -999 && !isNaN(data.temp_c)) {
+                elTemp.innerText = data.temp_c.toFixed(1) + '°C';
+                if (data.temp_c < 15) elTemp.className = 'card-value large text-info';
+                else if (data.temp_c < 30) elTemp.className = 'card-value large text-success';
+                else if (data.temp_c < 40) elTemp.className = 'card-value large text-warning';
+                else elTemp.className = 'card-value large text-danger';
+            } else {
+                elTemp.innerText = '--';
+                elTemp.className = 'card-value large text-neutral';
+            }
+
+            if (data.umid_pct !== undefined && data.umid_pct !== -999 && !isNaN(data.umid_pct)) {
+                elUmid.innerText = data.umid_pct.toFixed(1) + '%';
+                elUmid.className = 'card-value large text-info';
+            } else {
+                elUmid.innerText = '--';
+                elUmid.className = 'card-value large text-neutral';
+            }
+
+            const elModo = document.getElementById('modo');
+            elModo.className = 'card-value ' + (data.modo === 'DESARMADO' ? 'text-warning' : 'text-neutral');
+
+            const elEstado = document.getElementById('estado');
+            const cardEstado = elEstado.closest('.card');
+            elEstado.innerText = data.estado || '--';
+            cardEstado.className = 'card';
+            elEstado.className = 'card-value';
+
+            if (data.estado === 'NORMAL' || data.estado === 'ACESSO RFID') {
+                elEstado.classList.add('text-success');
+                cardEstado.classList.add('card-border-success');
+            }
+            else if (data.estado === 'EMERGENCIA RACK' || data.estado === 'INVASAO SALA') {
+                elEstado.classList.add('text-danger');
+                cardEstado.classList.add('card-border-danger');
+                if (!notificacaoJaDisparada) {
+                    notificar("⚠️ EMERGÊNCIA NO RACK!", "Estado: " + data.estado + " | Porta: " + (data.porta ? "Aberta" : "Fechada"));
+                    notificacaoJaDisparada = true;
+                }
+            }
+            else if (data.estado === 'AVISO SALA' || data.estado === 'APROXIMACAO RACK') {
+                elEstado.classList.add('text-warning');
+                cardEstado.classList.add('card-border-warning');
+            }
+
+            if (data.estado !== 'EMERGENCIA RACK' && data.estado !== 'INVASAO SALA') {
+                notificacaoJaDisparada = false;
+            }
+
+            const elPorta = document.getElementById('porta');
+            const cardPorta = elPorta.closest('.card');
+            elPorta.innerText = data.porta ? 'Aberta' : 'Fechada';
+            cardPorta.className = 'card';
+            elPorta.className = 'card-value';
+            if (data.porta) {
+                elPorta.style.color = '#ef4444';
+                elPorta.style.fontWeight = 'bold';
+                cardPorta.style.borderColor = '#ef4444';
+                cardPorta.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.2)';
+            } else {
+                elPorta.style.color = '#3b82f6';
+                elPorta.style.fontWeight = 'normal';
+                cardPorta.style.borderColor = '#334155';
+                cardPorta.style.boxShadow = 'none';
+            }
+
+            document.getElementById('invasoes').className = 'card-value large ' + (data.invasoes > 0 ? 'text-danger' : 'text-neutral');
+            document.getElementById('acessos').className = 'card-value large ' + (data.acessos > 0 ? 'text-info' : 'text-neutral');
+
+            if (data.dist_cm !== undefined && data.dist_cm !== null) {
+                atualizarGrafico(data.dist_cm, data.temp_c);
+            }
+        }
+
+        // ============================================================
+        // LOGS
+        // ============================================================
+        function adicionarLog(mensagem, time, isHistorico) {
+            const containerId = isHistorico ? 'log-historico' : 'log-eventos';
+            const container = document.getElementById(containerId);
+            const placeholder = container.querySelector('.placeholder-text');
+            if (placeholder) placeholder.remove();
+
+            const displayTime = time || new Date().toLocaleTimeString('pt-BR');
+
+            let corTexto = '#cbd5e1';
+            let corBorda = '#334155';
+            const msgUpper = (mensagem || '').toUpperCase();
+
+            if (msgUpper.includes("NEGADO") ||
+                msgUpper.includes("EMERGENCIA") ||
+                msgUpper.includes("INVASAO") ||
+                msgUpper.includes("CRITICO") ||
+                msgUpper.includes("FALHA")) {
+                corTexto = '#ef4444'; corBorda = '#ef4444';
+            }
+            else if (msgUpper.includes("BLOQUEADO") ||
+                msgUpper.includes("AVISO") ||
+                msgUpper.includes("MANUTENCAO") ||
+                msgUpper.includes("ALERTA")) {
+                corTexto = '#f59e0b'; corBorda = '#f59e0b';
+            }
+            else if (msgUpper.includes("AUTORIZADO") ||
+                msgUpper.includes("FECHADA") ||
+                msgUpper.includes("EXECUTADO") ||
+                msgUpper.includes("REARMADO") ||
+                msgUpper.includes("NORMALIZADO")) {
+                corTexto = '#10b981'; corBorda = '#10b981';
+            }
+            else if (msgUpper.includes("ABERTA")) {
+                corTexto = '#ef4444'; corBorda = '#ef4444';
+            }
+            else if (msgUpper.includes("COMANDO REMOTO")) {
+                corTexto = '#3b82f6'; corBorda = '#3b82f6';
+            }
+
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log-item';
+            logDiv.style.borderLeft = `3px solid ${corBorda}`;
+            logDiv.style.paddingLeft = '10px';
+
+            logDiv.innerHTML = `
+                <span style="color:${corTexto}; font-weight: 500;">${mensagem}</span>
+                <span style="color:#94a3b8; font-family: monospace;">${displayTime}</span>
+            `;
+
+            container.prepend(logDiv);
+            if (container.children.length > 20) container.lastChild.remove();
+
+            if (aguardandoConfirmacao && comandoEnviado === 'TESTE' &&
+                msgUpper.includes("TESTE CONCLUIDO")) {
+                aguardandoConfirmacao = false;
+                comandoEnviado = null;
+                desabilitarBotoes(false);
+            }
+        }
+
+        // ============================================================
+        // COMANDOS (com HMAC)
+        // ============================================================
+        async function enviarComando(comando) {
+            if (!client || !client.connected) {
+                alert('Erro: Não conectado ao broker MQTT.');
+                return;
+            }
+
+            if (!HMAC_KEY && comando !== 'TESTE') {
+                alert('Chave HMAC não configurada. Cole a chave no campo amarelo.');
+                return;
+            }
+
+            try {
+                let cmdParaEnviar;
+                if (comando === 'TESTE') {
+                    cmdParaEnviar = 'TESTE';  // TESTE não precisa de HMAC
+                } else {
+                    cmdParaEnviar = await assinarComando(comando);
+                }
+                client.publish(topicComando, cmdParaEnviar);
+                adicionarLog("Comando " + comando + " enviado. Aguardando confirmação...", null, false);
+
+                if (comando === 'TESTE') {
+                    aguardandoConfirmacao = true;
+                    comandoEnviado = 'TESTE';
+                    desabilitarBotoes(true);
+                    setTimeout(() => {
+                        if (comandoEnviado === 'TESTE') {
+                            aguardandoConfirmacao = false;
+                            comandoEnviado = null;
+                            desabilitarBotoes(false);
+                        }
+                    }, 15000);
+                } else {
+                    aguardandoConfirmacao = true;
+                    comandoEnviado = comando;
+                    desabilitarBotoes(true);
+                    setTimeout(() => {
+                        if (comandoEnviado === comando) {
+                            aguardandoConfirmacao = false;
+                            comandoEnviado = null;
+                            desabilitarBotoes(false);
+                        }
+                    }, 5000);
+                }
+            } catch (e) {
+                console.error('Erro ao assinar comando:', e);
+                alert('Erro ao assinar comando: ' + e.message);
+            }
+        }
+
+        async function enviarReset() {
+            if (!client || !client.connected) {
+                alert('Erro: Não conectado ao broker MQTT.');
+                return;
+            }
+
+            if (!HMAC_KEY) {
+                alert('Chave HMAC não configurada. Cole a chave no campo amarelo.');
+                return;
+            }
+
+            const token = prompt("Digite o token de reset:");
+            if (token !== RESET_TOKEN) { alert("Token inválido!"); return; }
+
+            try {
+                const cmdAssinado = await assinarComando("RESET", token);
+                client.publish(topicComando, cmdAssinado);
+                adicionarLog("Comando RESET enviado (assinado + token).", null, false);
+            } catch (e) {
+                console.error('Erro ao assinar RESET:', e);
+                alert('Erro ao assinar RESET: ' + e.message);
+            }
+        }
+
+        function forcarAtualizacao() {
+            if (!client || !client.connected) {
+                alert('Erro: Não conectado ao broker MQTT.');
+                return;
+            }
+            client.publish(topicComando, 'STATUS');
+            adicionarLog("Solicitando atualização de status...", null, false);
+        }
+
+        // ============================================================
+        // CHAVE HMAC
+        // ============================================================
+        function salvarChave() {
+            const input = document.getElementById('hmacKeyInput');
+            const chave = input.value.trim();
+            if (chave.length < 16) {
+                alert("Chave muito curta (mínimo 16 caracteres).");
+                return;
+            }
+            HMAC_KEY = chave;
+            localStorage.setItem('hmac_key', chave);
+            document.getElementById('hmacNote').style.display = 'none';
+            adicionarLog("Chave HMAC configurada.", null, false);
+        }
+
+        if (HMAC_KEY) {
+            document.getElementById('hmacNote').style.display = 'none';
+        } else {
+            document.getElementById('hmacNote').style.display = 'block';
+        }
+
+        // ============================================================
+        // INICIALIZAÇÃO
+        // ============================================================
+        window.onload = conectar;
+    </script>
+
+</body>
+
+</html>

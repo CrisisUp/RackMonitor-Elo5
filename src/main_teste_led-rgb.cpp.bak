@@ -1,0 +1,115 @@
+#include <Arduino.h>
+#include "config.h"
+
+// Pinos do LED RGB (ajuste se necessário)
+#define LED_R Pins::LED_R
+#define LED_G Pins::LED_G
+#define LED_B Pins::LED_B
+
+// Modo de inversão: true = anodo comum (255 - valor), false = catodo comum
+bool inverter = true;
+
+void setupPWM()
+{
+    ledcAttach(LED_R, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttach(LED_G, PWM_FREQ, PWM_RESOLUTION);
+    ledcAttach(LED_B, PWM_FREQ, PWM_RESOLUTION);
+}
+
+void escrever(int r, int g, int b)
+{
+    if (inverter)
+    {
+        ledcWrite(LED_R, 255 - constrain(r, 0, 255));
+        ledcWrite(LED_G, 255 - constrain(g, 0, 255));
+        ledcWrite(LED_B, 255 - constrain(b, 0, 255));
+    }
+    else
+    {
+        ledcWrite(LED_R, constrain(r, 0, 255));
+        ledcWrite(LED_G, constrain(g, 0, 255));
+        ledcWrite(LED_B, constrain(b, 0, 255));
+    }
+}
+
+void testarCor(const char *nome, int r, int g, int b, const char *esperado)
+{
+    Serial.println();
+    Serial.print(F(">>> Testando: "));
+    Serial.println(nome);
+    Serial.print(F("    RGB enviado: ("));
+    Serial.print(r);
+    Serial.print(F(", "));
+    Serial.print(g);
+    Serial.print(F(", "));
+    Serial.print(b);
+    Serial.println(F(")"));
+    Serial.print(F("    Voce deve ver: "));
+    Serial.println(esperado);
+    Serial.print(F("    Inversao: "));
+    Serial.println(inverter ? "ANODO COMUM (255 - valor)" : "CATODO COMUM (valor direto)");
+
+    escrever(r, g, b);
+    delay(1500);
+    escrever(0, 0, 0);
+    delay(500);
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    delay(1000);
+
+    Serial.println();
+    Serial.println(F("=========================================="));
+    Serial.println(F("  TESTE AVANCADO DO LED RGB"));
+    Serial.println(F("=========================================="));
+    Serial.print(F("Pinos: R="));
+    Serial.print(LED_R);
+    Serial.print(F(" G="));
+    Serial.print(LED_G);
+    Serial.print(F(" B="));
+    Serial.print(LED_B);
+    Serial.println();
+    Serial.println(F("------------------------------------------"));
+    Serial.println(F("FASE 1: Cores primarias (anodo comum)"));
+    Serial.println(F("------------------------------------------"));
+
+    setupPWM();
+    inverter = true;
+
+    testarCor("VERMELHO", 255, 0, 0, "vermelho puro");
+    testarCor("VERDE", 0, 255, 0, "verde puro");
+    testarCor("AZUL", 0, 0, 255, "azul puro");
+
+    Serial.println();
+    Serial.println(F("------------------------------------------"));
+    Serial.println(F("FASE 2: Cores primarias (catodo comum)"));
+    Serial.println(F("------------------------------------------"));
+
+    inverter = false;
+
+    testarCor("VERMELHO", 255, 0, 0, "vermelho puro");
+    testarCor("VERDE", 0, 255, 0, "verde puro");
+    testarCor("AZUL", 0, 0, 255, "azul puro");
+
+    Serial.println();
+    Serial.println(F("=========================================="));
+    Serial.println(F("  FIM DO TESTE"));
+    Serial.println(F("=========================================="));
+    Serial.println(F("Anote qual FASE mostrou as cores corretas."));
+    Serial.println(F("Se a FASE 1 estiver certa -> use anodo comum."));
+    Serial.println(F("Se a FASE 2 estiver certa -> use catodo comum."));
+    Serial.println();
+}
+
+void loop()
+{
+    // Pisca o LED em verde (estado SEGURO) para confirmar
+    // Ajuste 'inverter' conforme o resultado do teste
+    inverter = true; // troque para false se a FASE 2 foi a correta
+    escrever(0, 255, 0);
+    delay(1000);
+    escrever(0, 0, 0);
+    delay(1000);
+}

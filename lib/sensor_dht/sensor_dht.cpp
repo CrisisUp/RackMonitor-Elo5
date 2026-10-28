@@ -1,24 +1,36 @@
 #include "sensor_dht.h"
 
-// O construtor inicializa o objeto DHT interno
 SensorDHT::SensorDHT() : _dht(DHT_PIN, DHT_TYPE) {}
 
 void SensorDHT::begin()
 {
     _dht.begin();
-    // Nota: O logSerial não está disponível aqui (dependência circular).
-    // Deixamos o log para o main.cpp, ou removemos esta mensagem.
+    _ultimaLeitura = millis();
     Serial.println(F("[INFO] [DHT] Sensor DHT22 inicializado no GPIO 13."));
 }
 
-float SensorDHT::temperatura()
+bool SensorDHT::atualizar()
 {
-    float t = _dht.readTemperature();
-    return isnan(t) ? -999.0f : t;
-}
+    unsigned long agora = millis();
 
-float SensorDHT::umidade()
-{
+    // Respeita o intervalo mínimo de 2s do DHT22
+    if (agora - _ultimaLeitura < INTERVALO_MIN_MS)
+        return _valida;
+
+    _ultimaLeitura = agora;
+
+    float t = _dht.readTemperature();
     float u = _dht.readHumidity();
-    return isnan(u) ? -999.0f : u;
+
+    if (isnan(t) || isnan(u))
+    {
+        // Mantém os últimos valores válidos, mas marca como inválido
+        _valida = false;
+        return false;
+    }
+
+    _temperatura = t;
+    _umidade = u;
+    _valida = true;
+    return true;
 }

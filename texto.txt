@@ -1,0 +1,132 @@
+🎉 HMAC IMPLEMENTADO COM SUCESSO!
+
+Olhando o log, tudo compilou perfeitamente:
+hmac aparece no Dependency Graph
+libd0e/libhmac.a foi gerada
+Build do ESP32: [SUCCESS]
+12/12 testes nativos: [PASSED]
+
+📊 O que você conquistou
+
+Item	Status
+Lib hmac/ compilada	✅
+Comandos ARMAR/DESARMAR/RESET exigem HMAC	✅
+Anti-replay (±60s)	✅
+Comparação em tempo constante	✅
+Dupla proteção no RESET (HMAC + token)	✅
+Comandos de leitura abertos	✅
+Build do ESP32	✅
+12 testes nativos	✅
+
+🧪 Como testar (no hardware ou Wokwi)
+
+1. Boot do ESP32
+Abra o Monitor Serial e anote a chave HMAC gerada:
+
+text
+[HMAC] Chave gerada e salva na NVS:
+aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY
+[HMAC] Anote esta chave! Ela não será exibida novamente.
+
+2. Configure o script Python
+Edite tools/assinar_comando.py e cole a chave:
+
+python
+CHAVE = "aB3dE5fG7hJ9kL2mN4pQ6rS8tU0vW1xY"
+
+3. Assine e publique um comando
+bash
+# DESARMAR
+python tools/assinar_comando.py DESARMAR
+# Saída: DESARMAR|1729965432|A3F5C8B2D4E6...
+
+# Publique no MQTT
+mosquitto_pub -h broker.emqx.io -t "rack_monitor_ABCD1234/comando" -m "DESARMAR|1729965432|A3F5C8..."
+
+4. Verifique o log
+text
+[HMAC] Comando validado: DESARMAR
+[MQTT_CMD] Desarmado remoto executado.
+
+5. Teste rejeição
+bash
+# Sem HMAC
+mosquitto_pub -h broker.emqx.io -t ".../comando" -m "DESARMAR"
+# → [HMAC] Formato invalido. Use: COMANDO|TS|SIG
+
+# Assinatura inválida
+mosquitto_pub -h broker.emqx.io -t ".../comando" -m "DESARMAR|1729965432|INVALIDO"
+# → [HMAC] Comando rejeitado: assinatura invalida.
+
+# Replay (timestamp antigo)
+mosquitto_pub -h broker.emqx.io -t ".../comando" -m "DESARMAR|1000000000|A3F5C8..."
+# → [HMAC] Timestamp fora da janela
+
+6. Teste o RESET com dupla proteção
+bash
+python tools/assinar_comando.py RESET
+# Saída: RESET|1729965432|B4E6D8...|rack2026
+
+mosquitto_pub -h broker.emqx.io -t ".../comando" -m "RESET|1729965432|B4E6D8...|rack2026"
+# → [HMAC] Comando validado: RESET
+# → [MQTT_CMD] Reset remoto executado.
+⚠️ Observações importantes
+
+1. A chave é exibida UMA vez
+Após o primeiro boot, a chave fica só na NVS. Anote e guarde em local seguro. Se perder, precisará apagar a NVS (ou adicionar um comando HMAC_NEW).
+
+2. O dashboard externo precisa ser atualizado
+O dashboard atual (sem HMAC) vai ter os comandos ARMAR/DESARMAR rejeitados. Você precisa:
+
+Adicionar o script Python ao fluxo do dashboard, ou
+Implementar HMAC em JavaScript (Web Crypto API), ou
+Temporariamente, usar o Serial para comandos críticos.
+
+3. Sincronização de relógio
+
+O HMAC usa o timestamp Unix do RTC (via NTP). Se o NTP falhar no boot, o RTC fica com hora errada e o HMAC rejeita todos os comandos. Nesse caso:
+Comandos via Serial continuam funcionando (sem HMAC).
+O dashboard precisa esperar o NTP sincronizar.
+
+4. O cmdOriginal pode ser removido
+No _tratarComando, a variável cmdOriginal não é mais usada. Você pode removê-la:
+
+cpp
+String cmdOriginal = cmd;  // <-- pode remover
+Isso deixa o código mais limpo, mas não afeta a funcionalidade.
+
+🚀 Próximos passos
+
+Agora que o HMAC está implementado, os próximos upgrades são:
+CI/CD (GitHub Actions) — rodar os 12 testes automaticamente (30 min).
+Testes no hardware físico — validar OTA, NTP e Dashboard Local.
+Broker privado (HiveMQ) — migrar do broker.emqx.io para um broker com TLS.
+Testes E2E (Python) — validar o sistema completo via MQTT.
+Notificação push — integrar com Telegram ou ntfy.sh.
+
+
+
+localStorage.removeItem('hmac_key');
+location.reload();
+
+pio run -e esp32dev -t erase
+pio run -e esp32dev -t upload
+pio device monitor (ou pio device monitor --baud 74880)
+
+📋 Resumo
+Ação	         Comando/Passo
+Abrir monitor	 pio device monitor
+Forçar boot	     Pressionar EN na placa
+Ver chave	     Procurar por [HMAC] Chave gerada...
+Se não aparecer	Fazer upload com monitor aberto
+
+A chave apareceu! 🎉
+
+
+exemplo:
+text
+[HMAC] Chave gerada e salva na NVS:
+i/@"rU=pXm*VFor"zD^'bm^PS({\[|e6
+[HMAC] Anote esta chave! Ela não será exibida novamente.
+
+ADD_CARD D4A33F02
