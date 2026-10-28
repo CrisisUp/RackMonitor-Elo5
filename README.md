@@ -134,16 +134,13 @@ RackMonitor-Elo5/
 
 ### 4. Testes Nativos (PlatformIO + Unity)
 
-O projeto possui 12 testes automatizados que rodam no PC (ambiente native),
-sem necessidade de hardware. Eles cobrem:
+O projeto possui **12 testes automatizados** que rodam no PC (ambiente `native`), sem necessidade de hardware. Eles cobrem:
 
-Alarme: 4 testes (prioridade de porta, RFID, movimento, caso normal).
+- **Alarme:** 4 testes (prioridade de porta, RFID, movimento, caso normal).
+- **JSON:** 2 testes (formato correto, tratamento de `null` e `-999`).
+- **Ring Buffer:** 6 testes (vazio, push, conteúdo, overflow, clear, truncamento).
 
-JSON: 2 testes (formato correto, tratamento de null e -999).
-
-Ring Buffer: 6 testes (vazio, push, conteúdo, overflow, clear, truncamento).
-
-Para rodar:
+**Para rodar:**
 
 ```bash
 pio test -e native
@@ -209,25 +206,16 @@ lib_deps =
 
 ## 🧠 Regras de Ouro (Arquitetura)
 
-Sensores não decidem — só medem e filtram.
-
-Atuadores não leem sensores — só consomem estado.
-
-Alarme é fonte única de verdade — recebe struct/eventos.
-
-Eventos são fatos — botão foi pressionado, cartão foi lido.
-
-Toda transição é logada — auditoria completa.
-
-loop() só orquestra — update → coleta eventos → renderiza.
-
-MQTT é observador — comandos remotos pedem via API pública.
-
-NVS é passiva — não interfere na lógica do alarme.
-
-JSON é montado uma vez — montarJSONStatus() reutilizado por MQTT e Dashboard.
-
-Logs alimentam o ring buffer — toda chamada a logSerial() é auditável.
+1. **Sensores não decidem** — só medem e filtram.
+2. **Atuadores não leem sensores** — só consomem estado.
+3. **Alarme é fonte única de verdade** — recebe struct/eventos.
+4. **Eventos são fatos** — botão foi pressionado, cartão foi lido.
+5. **Toda transição é logada** — auditoria completa.
+6. **`loop()` só orquestra** — update → coleta eventos → renderiza.
+7. **MQTT é observador** — comandos remotos pedem via API pública.
+8. **NVS é passiva** — não interfere na lógica do alarme.
+9. **JSON é montado uma vez** — `montarJSONStatus()` reutilizado por MQTT e Dashboard.
+10. **Logs alimentam o ring buffer** — toda chamada a `logSerial()` é auditável.
 
 ## 📡 Comunicação MQTT (v7.4)
 
@@ -245,15 +233,10 @@ Logs alimentam o ring buffer — toda chamada a logSerial() é auditável.
 
 Salvos na flash do ESP32:
 
-Configuração: limiar, timeout, t_alert, t_crit, u_alert, u_crit.
-
-Contadores: invasoes, aberturas, acessos, desarmes, rearmes.
-
-Cartões RFID: total_cards + card_0, card_1, …
-
-Modo: modo (ARMADO / DESARMADO — persistido entre reboots e OTA).
-
-## 🖥️ Comandos Serial (firmware v7.4)
+- **Configuração:** `limiar`, `timeout`, `t_alert`, `t_crit`, `u_alert`, `u_crit`.
+- **Contadores:** `invasoes`, `aberturas`, `acessos`, `desarmes`, `rearmes`.
+- **Cartões RFID:** `total_cards` + `card_0`, `card_1`, …
+- **Modo:** `modo` (ARMADO / DESARMADO — persistido entre reboots e OTA).
 
 ## 🖥️ Comandos Serial (firmware v7.4)
 
@@ -411,3 +394,15 @@ Este projeto foi construído sobre os ombros de gigantes. Agradecimentos às seg
 
 Este é o **`README.md` completo e atualizado para a v7.4**. Ele reflete a nova estrutura modular, os 12 testes nativos, a pasta `lib/` com 20 bibliotecas, e mantém toda a documentação e badges profissionais. Você pode substituir o conteúdo do seu `README.md` atual por este bloco inteiro.
 ```
+
+## 📌 Próximos passos (quando quiser continuar)
+
+O projeto está pronto para produção, mas sempre há espaço para evoluir:
+
+- **HMAC nos comandos MQTT** — assinar `ARMAR`/`DESARMAR` com SHA256.
+- **CI/CD (GitHub Actions)** — rodar os 12 testes automaticamente.
+- **Testes E2E** — validar o sistema completo via MQTT com Python.
+- **Testes no hardware físico** — validar OTA, NTP e Dashboard Local.
+- **Broker privado** — migrar do `broker.emqx.io` para HiveMQ Cloud.
+- **Notificação push** — integrar com Telegram ou ntfy.sh.
+- **Persistência do histórico** — backend com InfluxDB ou SQLite.
