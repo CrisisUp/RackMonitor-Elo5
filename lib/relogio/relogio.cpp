@@ -1,25 +1,40 @@
 #include "relogio.h"
 
-// Nota: logSerial ainda está no main.cpp. Para evitar dependência circular,
-// usamos Serial.println diretamente aqui.
-// Se quiser, podemos mover o logSerial para um header futuro.
+// Pinos do DS1302 (DAT, CLK, RST) - ajuste conforme a sua ligação física
+#define DS1302_DAT 23
+#define DS1302_CLK 18
+#define DS1302_RST 4
+
+Relogio::Relogio()
+    : _wire(DS1302_DAT, DS1302_CLK, DS1302_RST),
+      _rtc(_wire)
+{
+}
 
 bool Relogio::begin()
 {
-    if (_rtc.begin())
+    _rtc.Begin();
+
+    if (_rtc.GetIsRunning())
     {
-        _rtcDisponivel = true;
-        fonteTempoAtual = FONTE_RTC; // Variável global do main.cpp
-        if (_rtc.lostPower())
+        RtcDateTime agora = _rtc.GetDateTime();
+        if (agora.IsValid() && agora.Year() >= 2024)
         {
-            Serial.println(F("[WARN] RTC perdeu energia. Aguardando sync NTP ou ajuste manual."));
+            _rtcDisponivel = true;
+            fonteTempoAtual = FONTE_RTC;
+            Serial.println(F("[INFO] [RTC] RTC DS1302 inicializado."));
+            return true;
         }
-        Serial.println(F("[INFO] [RTC] RTC DS3231 inicializado."));
-        return true;
+        else
+        {
+            Serial.println(F("[WARN] RTC DS1302: data invalida (perdeu energia?)."));
+            Serial.println(F("[WARN] Aguardando sync NTP ou ajuste manual."));
+        }
     }
+
     _rtcDisponivel = false;
     fonteTempoAtual = FONTE_MILLIS;
-    Serial.println(F("[WARN] [RTC] RTC ausente. Usando millis() como fallback."));
+    Serial.println(F("[WARN] [RTC] RTC DS1302 ausente ou com data invalida. Usando millis()."));
     return false;
 }
 
@@ -57,15 +72,15 @@ bool Relogio::sincronizarNTP()
 
     if (_rtcDisponivel)
     {
-        DateTime agoraNTP(
+        RtcDateTime agoraNTP(
             timeinfo.tm_year + 1900,
             timeinfo.tm_mon + 1,
             timeinfo.tm_mday,
             timeinfo.tm_hour,
             timeinfo.tm_min,
             timeinfo.tm_sec);
-        _rtc.adjust(agoraNTP);
-        Serial.println(F("[INFO] [NTP] RTC ajustado via NTP."));
+        _rtc.SetDateTime(agoraNTP);
+        Serial.println(F("[INFO] [NTP] RTC DS1302 ajustado via NTP."));
         fonteTempoAtual = FONTE_RTC;
     }
     else
@@ -147,21 +162,44 @@ bool Relogio::ajustarManual(int ano, int mes, int dia, int hora, int min, int se
         Serial.println(F("[WARN] [RTC] Ajuste manual ignorado: RTC ausente."));
         return false;
     }
-    _rtc.adjust(DateTime(ano, mes, dia, hora, min, seg));
+    _rtc.SetDateTime(RtcDateTime(ano, mes, dia, hora, min, seg));
     fonteTempoAtual = FONTE_RTC;
     _ultimaSincronizacaoNTP = millis();
-    Serial.println(F("[INFO] [RTC] RTC ajustado manualmente."));
+    Serial.println(F("[INFO] [RTC] RTC DS1302 ajustado manualmente."));
     return true;
+}
+
+// Novo: retorna true se houver hora válida (RTC ou NTP).
+// Diferente de disponivel(), que só olha o RTC físico.
+bool Relogio::temHoraValida()
+{
+    return _agora().unixtime() > 0;
+}
+
+// Substitui o antigo "driver().now().unixtime()"
+uint32_t Relogio::agoraUnix()
+{
+    DateTime agora = _agora();
+    uint32_t t = agora.unixtime();
+    if (t > 0)
+        return t;
+
+    // Fallback: millis em segundos (só se RTC e NTP falharem)
+    return millis() / 1000;
 }
 
 DateTime Relogio::_agora()
 {
     if (_rtcDisponivel)
     {
-        DateTime agora = _rtc.now();
-        if (agora.year() >= 2020)
-            return agora;
+        RtcDateTime agora = _rtc.GetDateTime();
+        if (agora.IsValid() && agora.Year() >= 2024)
+        {
+            return DateTime(agora.Year(), agora.Month(), agora.Day(),
+                            agora.Hour(), agora.Minute(), agora.Second());
+        }
     }
+
     if (fonteTempoAtual == FONTE_NTP && WiFi.status() == WL_CONNECTED)
     {
         struct tm timeinfo;

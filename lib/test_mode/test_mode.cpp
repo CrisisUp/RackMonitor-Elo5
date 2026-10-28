@@ -31,16 +31,15 @@ void executarModoTeste()
     oled.getDisplay().println("Aguarde...");
     oled.getDisplay().display();
 
-    byte versao = leitorRFID.getRFID().PCD_ReadRegister(MFRC522::VersionReg);
-    if (versao != 0x00 && versao != 0xFF)
+    if (leitorRFID.estaPronto())
     {
-        logSerial("INFO", "TESTE", "[OK] RFID MFRC522 (v0x" + String(versao, HEX) + ").");
+        logSerial("INFO", "TESTE", "[OK] RFID PN532 (I2C) respondendo.");
         enviarLogSite("TESTE: RFID OK");
         ok++;
     }
     else
     {
-        logSerial("CRIT", "TESTE", "[FALHA] RFID MFRC522 NAO responde.");
+        logSerial("CRIT", "TESTE", "[FALHA] RFID PN532 NAO responde.");
         enviarLogSite("TESTE: RFID FALHA");
         resumoFalhas += "RFID ";
         falhas++;

@@ -1,0 +1,140 @@
+#include <Arduino.h>
+#include <DHT.h>
+
+#define DHT_PIN 13
+#define DHT_TYPE DHT22
+#define INTERVALO_LEITURA_MS 3000
+#define AMOSTRAS_PARA_RESUMO 10
+
+DHT dht(DHT_PIN, DHT_TYPE);
+
+unsigned long tempoUltimaLeitura = 0;
+int contadorLeituras = 0;
+int contadorFalhas = 0;
+
+float somaTemp = 0, somaUmid = 0;
+float minTemp = 999, maxTemp = -999;
+float minUmid = 999, maxUmid = -999;
+float ultimaTemp = NAN, ultimaUmid = NAN;
+
+void setup()
+{
+    Serial.begin(115200);
+    delay(1000);
+    dht.begin();
+
+    Serial.println();
+    Serial.println(F("=========================================="));
+    Serial.println(F("  TESTE AVANCADO DO DHT22"));
+    Serial.println(F("=========================================="));
+    Serial.print(F("Pino: GPIO "));
+    Serial.println(DHT_PIN);
+    Serial.println(F("Tipo: DHT22"));
+    Serial.println(F("Aguardando estabilizacao (3s)..."));
+    delay(3000);
+    Serial.println(F("Iniciando leituras a cada 3s."));
+    Serial.println(F("------------------------------------------"));
+}
+
+void loop()
+{
+    unsigned long agora = millis();
+
+    if (agora - tempoUltimaLeitura >= INTERVALO_LEITURA_MS)
+    {
+        tempoUltimaLeitura = agora;
+
+        float t = dht.readTemperature();
+        float u = dht.readHumidity();
+
+        Serial.print(F("[LEITURA "));
+        Serial.print(contadorLeituras + 1);
+        Serial.print(F("] "));
+
+        if (isnan(t) || isnan(u))
+        {
+            contadorFalhas++;
+            Serial.println(F("FALHA (NaN). Verifique fiacao/pull-up/alimentacao."));
+        }
+        else
+        {
+            Serial.print(F("T="));
+            Serial.print(t, 1);
+            Serial.print(F("C | U="));
+            Serial.print(u, 1);
+            Serial.print(F("% | dT="));
+            if (!isnan(ultimaTemp))
+            {
+                Serial.print(t - ultimaTemp, 1);
+            }
+            else
+            {
+                Serial.print(F("--"));
+            }
+            Serial.print(F(" | dU="));
+            if (!isnan(ultimaUmid))
+            {
+                Serial.print(u - ultimaUmid, 1);
+            }
+            else
+            {
+                Serial.print(F("--"));
+            }
+            Serial.println();
+
+            // Atualiza estatísticas
+            somaTemp += t;
+            somaUmid += u;
+            if (t < minTemp)
+                minTemp = t;
+            if (t > maxTemp)
+                maxTemp = t;
+            if (u < minUmid)
+                minUmid = u;
+            if (u > maxUmid)
+                maxUmid = u;
+
+            ultimaTemp = t;
+            ultimaUmid = u;
+
+            contadorLeituras++;
+
+            // A cada N leituras, imprime o resumo
+            if (contadorLeituras % AMOSTRAS_PARA_RESUMO == 0)
+            {
+                Serial.println(F("------------------------------------------"));
+                Serial.print(F("[RESUMO] Amostras: "));
+                Serial.println(contadorLeituras);
+                Serial.print(F("         Falhas: "));
+                Serial.println(contadorFalhas);
+                Serial.print(F("         Temp: min="));
+                Serial.print(minTemp, 1);
+                Serial.print(F(" max="));
+                Serial.print(maxTemp, 1);
+                Serial.print(F(" media="));
+                Serial.print(somaTemp / contadorLeituras, 1);
+                Serial.println(F("C"));
+                Serial.print(F("         Umid: min="));
+                Serial.print(minUmid, 1);
+                Serial.print(F(" max="));
+                Serial.print(maxUmid, 1);
+                Serial.print(F(" media="));
+                Serial.print(somaUmid / contadorLeituras, 1);
+                Serial.println(F("%"));
+                Serial.println(F("------------------------------------------"));
+
+                // Reset das estatísticas para o próximo bloco
+                somaTemp = 0;
+                somaUmid = 0;
+                minTemp = 999;
+                maxTemp = -999;
+                minUmid = 999;
+                maxUmid = -999;
+                contadorLeituras = 0;
+                contadorFalhas = 0;
+            }
+        }
+    }
+
+    delay(50);
+}

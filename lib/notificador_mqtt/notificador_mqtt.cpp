@@ -1,8 +1,9 @@
 #include "notificador_mqtt.h"
+#include "../hmac/hmac.h"
 
-// Se o prefs ainda estiver no main.cpp, declaramos aqui:
-extern Preferences prefs;
-
+// =========================================================================
+// INICIALIZAÇÃO
+// =========================================================================
 void NotificadorMQTT::begin()
 {
     Serial.print(F("[MQTT] Conectando ao WiFi"));
@@ -33,6 +34,9 @@ void NotificadorMQTT::begin()
                         { _tratarComando(topic, payload, length); });
 }
 
+// =========================================================================
+// LOOP DE ATUALIZAÇÃO
+// =========================================================================
 void NotificadorMQTT::update()
 {
     if (WiFi.status() != WL_CONNECTED)
@@ -112,6 +116,9 @@ void NotificadorMQTT::update()
     }
 }
 
+// =========================================================================
+// HELPERS
+// =========================================================================
 bool NotificadorMQTT::estaConectado() { return _client.connected(); }
 
 bool NotificadorMQTT::publicarLog(const String &payload)
@@ -119,6 +126,9 @@ bool NotificadorMQTT::publicarLog(const String &payload)
     return _client.publish(MQTT_TOPIC_LOGS, payload.c_str());
 }
 
+// =========================================================================
+// PUBLICAÇÃO DE STATUS
+// =========================================================================
 void NotificadorMQTT::_publicar(bool forcar)
 {
     if (!forcar && alarme.estadoAtual == _ultimoEstadoPublicado &&
@@ -201,6 +211,9 @@ void NotificadorMQTT::_publicar(bool forcar)
     _ultimoEstadoPortaPublicado = porta.estaAberta();
 }
 
+// =========================================================================
+// PUBLICAÇÃO DE AMBIENTE
+// =========================================================================
 void NotificadorMQTT::_publicarAmbiente()
 {
     String payload = "{";
@@ -236,6 +249,9 @@ void NotificadorMQTT::_publicarAmbiente()
     }
 }
 
+// =========================================================================
+// TRATAMENTO DE COMANDOS (com validação HMAC)
+// =========================================================================
 void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int length)
 {
     String cmd;
@@ -248,6 +264,78 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
     logSerial("INFO", "MQTT_CMD", String("Recebido [") + topic + "]: " + cmd);
 
+    // ============================================================
+    // VALIDAÇÃO HMAC PARA COMANDOS CRÍTICOS
+    // ============================================================
+    if (cmd.startsWith("ARMAR") || cmd.startsWith("DESARMAR") || cmd.startsWith("RESET"))
+    {
+        int p1 = cmd.indexOf('|');
+        int p2 = cmd.indexOf('|', p1 + 1);
+
+        if (p1 == -1 || p2 == -1)
+        {
+            logSerial("WARN", "HMAC", "Formato invalido. Use: COMANDO|TS|SIG (RESET: |token)");
+            return;
+        }
+
+        String comando = cmd.substring(0, p1);
+        uint32_t ts = cmd.substring(p1 + 1, p2).toInt();
+        String resto = cmd.substring(p2 + 1);
+
+        String sig;
+        String token = "";
+
+        if (comando == "RESET")
+        {
+            int p3 = resto.indexOf('|');
+            if (p3 == -1)
+            {
+                logSerial("WARN", "HMAC", "RESET requer token: RESET|TS|SIG|token");
+                return;
+            }
+            sig = resto.substring(0, p3);
+            token = resto.substring(p3 + 1);
+            token.trim();
+        }
+        else
+        {
+            sig = resto;
+        }
+        sig.trim();
+
+        // CORRIGIDO: usa temHoraValida() em vez de disponivel()
+        // para aceitar também o fallback NTP.
+        uint32_t agora = 0;
+        if (relogio.temHoraValida())
+        {
+            agora = relogio.agoraUnix();
+        }
+        else
+        {
+            agora = millis() / 1000;
+        }
+
+        if (!validarHMAC(comando, ts, sig, prefs, agora))
+        {
+            logSerial("WARN", "HMAC", "Comando rejeitado: assinatura invalida.");
+            return;
+        }
+
+        logSerial("INFO", "HMAC", "Comando validado: " + comando);
+
+        if (comando == "RESET" && token != MQTT_RESET_TOKEN)
+        {
+            logSerial("WARN", "HMAC", "RESET negado: token invalido.");
+            enviarLogSite("Comando remoto: reset negado (token invalido)");
+            return;
+        }
+
+        cmd = comando;
+    }
+
+    // ============================================================
+    // TÓPICO DE AMBIENTE
+    // ============================================================
     if (String(topic) == MQTT_TOPIC_CMD_AMBIENTE)
     {
         if (cmd.startsWith("SET_TEMP_ALERTA "))
@@ -317,6 +405,9 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
         return;
     }
 
+    // ============================================================
+    // TÓPICO DE SEGURANÇA
+    // ============================================================
     if (cmd == "DESARMAR")
     {
         if (alarme.modo == ARMADO)
@@ -371,29 +462,18 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
         logSerial("INFO", "MQTT_CMD", "Enviando STATUS sob demanda.");
         _publicar(true);
     }
-    else if (cmd.startsWith("RESET"))
+    else if (cmd == "RESET")
     {
-        String token = cmdOriginal.substring(5);
-        token.trim();
-
-        if (token != MQTT_RESET_TOKEN)
-        {
-            logSerial("WARN", "MQTT_CMD", "RESET negado: token invalido.");
-            enviarLogSite("Comando remoto: reset negado (token invalido)");
-        }
-        else
-        {
-            alarme.contadorAberturasPorta = 0;
-            alarme.contadorAproximacoes = 0;
-            alarme.contadorAcessosValidos = 0;
-            alarme.contadorMovimentosManutencao = 0;
-            alarme.contadorDesarmes = 0;
-            alarme.resetContadoresPendente = false;
-            salvarConfig();
-            logSerial("INFO", "MQTT_CMD", "Reset remoto executado (seguranca preservada).");
-            enviarLogSite("Comando remoto: reset operacional executado");
-            _publicar(true);
-        }
+        alarme.contadorAberturasPorta = 0;
+        alarme.contadorAproximacoes = 0;
+        alarme.contadorAcessosValidos = 0;
+        alarme.contadorMovimentosManutencao = 0;
+        alarme.contadorDesarmes = 0;
+        alarme.resetContadoresPendente = false;
+        salvarConfig();
+        logSerial("INFO", "MQTT_CMD", "Reset remoto executado (seguranca preservada).");
+        enviarLogSite("Comando remoto: reset operacional executado");
+        _publicar(true);
     }
     else if (cmd == "TESTE")
     {

@@ -6,15 +6,18 @@
 #include <vector>
 #include "../../include/config.h"
 #include "../../include/state.h"
+#include "../../include/ring_buffer.h"
 #include "../relogio/relogio.h"
 #include "../alarme/alarme.h"
 #include "../porta/porta.h"
 #include "../ldr/ldr.h"
 #include "../ultrassonico/ultrassonico.h"
 #include "../audio/audio.h"
-#include "../../include/ring_buffer.h"
+#include "../hmac/hmac.h"
 
-// Variáveis externas do main.cpp
+// =========================================================================
+// VARIÁVEIS EXTERNAS DO MAIN.CPP
+// =========================================================================
 extern Alarme alarme;
 extern Porta porta;
 extern LDR ldr;
@@ -38,11 +41,16 @@ extern float limiarUmidCritico;
 extern bool contadoresDirty;
 extern bool _sensorDHTPerdido;
 
-// Funções externas do main.cpp
+// =========================================================================
+// FUNÇÕES EXTERNAS DO MAIN.CPP
+// =========================================================================
 void logSerial(const String &nivel, const String &tag, const String &mensagem);
 void enviarLogSite(const String &mensagem);
 void salvarConfig();
 
+// =========================================================================
+// CLASSE NOTIFICADOR MQTT
+// =========================================================================
 class NotificadorMQTT
 {
 public:

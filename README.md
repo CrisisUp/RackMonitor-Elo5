@@ -238,6 +238,13 @@ Salvos na flash do ESP32:
 - **Cartões RFID:** `total_cards` + `card_0`, `card_1`, …
 - **Modo:** `modo` (ARMADO / DESARMADO — persistido entre reboots e OTA).
 
+| Chave | Valor | Tipo |
+| :--- | :--- | :--- |
+| `limiar` | 50.0 | `float` |
+| `timeout` | 1800000 | `unsigned long` |
+| `invasoes` | 3 | `unsigned int` |
+| `modo` | 0 (ARMADO) | `uint8_t` |
+
 ## 🖥️ Comandos Serial (firmware v7.4)
 
 | Comando | Descrição |
@@ -394,15 +401,3 @@ Este projeto foi construído sobre os ombros de gigantes. Agradecimentos às seg
 
 Este é o **`README.md` completo e atualizado para a v7.4**. Ele reflete a nova estrutura modular, os 12 testes nativos, a pasta `lib/` com 20 bibliotecas, e mantém toda a documentação e badges profissionais. Você pode substituir o conteúdo do seu `README.md` atual por este bloco inteiro.
 ```
-
-## 📌 Próximos passos (quando quiser continuar)
-
-O projeto está pronto para produção, mas sempre há espaço para evoluir:
-
-- **HMAC nos comandos MQTT** — assinar `ARMAR`/`DESARMAR` com SHA256.
-- **CI/CD (GitHub Actions)** — rodar os 12 testes automaticamente.
-- **Testes E2E** — validar o sistema completo via MQTT com Python.
-- **Testes no hardware físico** — validar OTA, NTP e Dashboard Local.
-- **Broker privado** — migrar do `broker.emqx.io` para HiveMQ Cloud.
-- **Notificação push** — integrar com Telegram ou ntfy.sh.
-- **Persistência do histórico** — backend com InfluxDB ou SQLite.

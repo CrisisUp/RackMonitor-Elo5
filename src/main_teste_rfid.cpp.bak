@@ -1,0 +1,55 @@
+#include <Wire.h>
+#include <Adafruit_PN532.h>
+
+// Pinos I2C padrão do ESP32
+#define SDA_PIN 21
+#define SCL_PIN 22
+
+Adafruit_PN532 nfc(SDA_PIN, SCL_PIN);
+
+void setup(void)
+{
+    Serial.begin(115200);
+    delay(1000);
+    Serial.println("\n--- Teste Isolado NFC Module V3 (PN532) ---");
+
+    Wire.begin(SDA_PIN, SCL_PIN);
+    nfc.begin();
+
+    uint32_t versiondata = nfc.getFirmwareVersion();
+    if (!versiondata)
+    {
+        Serial.println("❌ FALHA: PN532 nao detectado!");
+        Serial.println("Verifique: switches (S1=ON, S2=OFF), fiacao I2C, 3.3V.");
+        while (1)
+            ; // trava aqui
+    }
+
+    Serial.print("✅ PN532 encontrado! Firmware: 0x");
+    Serial.println(versiondata, HEX);
+
+    nfc.SAMConfig();
+    Serial.println("Aguardando cartao NFC/RFID...");
+}
+
+void loop(void)
+{
+    uint8_t success;
+    uint8_t uid[] = {0, 0, 0, 0, 0, 0, 0};
+    uint8_t uidLength;
+
+    success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+
+    if (success)
+    {
+        Serial.print("✅ Cartao detectado! UID: ");
+        for (uint8_t i = 0; i < uidLength; i++)
+        {
+            Serial.print("0x");
+            Serial.print(uid[i], HEX);
+            Serial.print(" ");
+        }
+        Serial.println();
+        delay(2000);
+    }
+}

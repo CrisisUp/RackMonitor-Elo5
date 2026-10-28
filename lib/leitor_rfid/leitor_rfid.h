@@ -1,7 +1,7 @@
 #pragma once
 #include <Arduino.h>
-#include <SPI.h>
-#include <MFRC522.h>
+#include <Wire.h>
+#include <Adafruit_PN532.h>
 #include "../../include/config.h"
 #include "../../include/state.h"
 
@@ -11,9 +11,8 @@ public:
     LeitorRFID();
     void begin();
     EventoRFID ler();
-
-    MFRC522 &getRFID() { return _rfid; }
+    bool estaPronto();
 
 private:
-    MFRC522 _rfid;
+    Adafruit_PN532 _nfc;
 };
