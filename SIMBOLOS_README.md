@@ -27,7 +27,7 @@
 | `- item` | Lista com bullets | Bibliotecas, comandos, checklist |
 | `* item` | Lista com bullets (alternativo) | — |
 | `1. item` | Lista numerada | Princípios de arquitetura |
-| `  - item` (indentado) | Sublista | Regras de ouro (se necessário) |
+| `- item` (indentado) | Sublista | Regras de ouro (se necessário) |
 
 ## 4. Tabelas
 
