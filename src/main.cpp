@@ -210,22 +210,14 @@ void setup()
         logSerial("WARN", "NTP", "Wi-Fi offline. Fonte: " + relogio.fonteTempoStr());
     }
 
-<<<<<<< HEAD
-    // 12. HMAC: garantir que a chave exista (gerar e imprimir se NVS vazia)
-=======
     // Gerar chave HMAC se não existir
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
     prefs.begin("rack", true);
     bool temChave = prefs.isKey("hmac_key");
     prefs.end();
 
     if (!temChave)
     {
-<<<<<<< HEAD
-        gerarChaveHMAC(prefs); // imprime a chave completa no serial
-=======
         gerarChaveHMAC(prefs);
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
     }
     else
     {

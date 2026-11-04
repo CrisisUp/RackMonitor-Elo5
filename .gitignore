@@ -1,17 +1,8 @@
-<<<<<<< HEAD
 # PlatformIO (build e dependências)
-=======
-# =========================================
-# PLATFORMIO
-# =========================================
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 .pio/
 .pioenvs/
 .piolibdeps/
 
-<<<<<<< HEAD
-# VS Code (configurações locais)
-=======
 # =========================================
 # CREDENCIAIS E CONFIGURAÇÕES SENSÍVEIS
 # =========================================
@@ -22,7 +13,6 @@ include/secrets.h
 # =========================================
 # IDE / EDITOR
 # =========================================
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 .vscode/
 .idea/
 *.swp
@@ -41,18 +31,6 @@ Thumbs.db
 *.tmp
 *.bak
 
-<<<<<<< HEAD
-# ============================================================
-# SEGREDOS (NUNCA COMMITAR)
-# ============================================================
-include/secrets.h
-
-# Se você colocar senhas no main.cpp, descomente a linha abaixo
-# src/main.cpp
-
-# Configurações locais (opcional)
-.markdownlint.json
-=======
 # =========================================
 # ARQUIVOS DE BUILD
 # =========================================
@@ -64,4 +42,3 @@ include/secrets.h
 # DOCKER
 # =========================================
 docker-compose.override.yml
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)

@@ -57,15 +57,12 @@ String calcularHMAC(const String &payload, const String &chave)
 
 /**
  * @brief Valida um comando HMAC com anti-replay.
-<<<<<<< HEAD
-=======
  * @param cmd  Comando (ex: "ARMAR")
  * @param ts   Timestamp Unix (segundos) recebido no payload.
  * @param sig  Assinatura HMAC recebida (hex, 64 chars).
  * @param prefs Referência ao Preferences.
  * @param agora Timestamp Unix atual (fornecido pelo chamador, ex: relogio).
  * @return true se válido, false caso contrário.
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
  */
 bool validarHMAC(const String &cmd, uint32_t ts, const String &sig, Preferences &prefs, uint32_t agora)
 {
@@ -80,38 +77,6 @@ bool validarHMAC(const String &cmd, uint32_t ts, const String &sig, Preferences 
         return false;
     }
 
-<<<<<<< HEAD
-    // 2. Obter chave
-    String chave = obterChaveHMAC(prefs);
-    if (chave.length() == 0)
-    {
-        Serial.println(F("[HMAC] Chave nao encontrada na NVS."));
-        return false;
-    }
-
-    // 3. Montar payload e calcular HMAC esperado
-    String payload = cmd + "|" + String(ts);
-
-    // --- LOGS DE DIAGNOSTICO (remover depois) ---
-    Serial.print(F("[HMAC] Payload: "));
-    Serial.println(payload);
-    Serial.print(F("[HMAC] Chave (primeiros 8): "));
-    Serial.println(chave.substring(0, 8));
-    // --------------------------------------------
-
-    String sigEsperada = calcularHMAC(payload, chave);
-
-    // 4. Comparar (tempo constante)
-    if (sigEsperada.length() != sig.length())
-    {
-        Serial.print(F("[HMAC] Tamanho de assinatura invalido. Esperada: "));
-        Serial.print(sigEsperada);
-        Serial.print(F(" | Recebida: "));
-        Serial.println(sig);
-        return false;
-    }
-
-=======
     // 2. Calcular HMAC esperado
     String chave = obterChaveHMAC(prefs);
     if (chave.length() == 0)
@@ -129,22 +94,14 @@ bool validarHMAC(const String &cmd, uint32_t ts, const String &sig, Preferences 
         Serial.println(F("[HMAC] Tamanho de assinatura inválido."));
         return false;
     }
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
     byte diffByte = 0;
     for (size_t i = 0; i < sigEsperada.length(); i++)
     {
         diffByte |= (sigEsperada[i] ^ sig[i]);
     }
-<<<<<<< HEAD
-
-    if (diffByte != 0)
-    {
-        Serial.print(F("[HMAC] Assinatura invalida. Esperada: "));
-=======
     if (diffByte != 0)
     {
         Serial.print(F("[HMAC] Assinatura inválida. Esperada: "));
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
         Serial.print(sigEsperada);
         Serial.print(F(" | Recebida: "));
         Serial.println(sig);

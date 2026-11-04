@@ -107,30 +107,4 @@ Notificação push — integrar com Telegram ou ntfy.sh.
 
 
 localStorage.removeItem('hmac_key');
-<<<<<<< HEAD
 location.reload();
-
-pio run -e esp32dev -t erase
-pio run -e esp32dev -t upload
-pio device monitor (ou pio device monitor --baud 74880)
-
-📋 Resumo
-Ação	         Comando/Passo
-Abrir monitor	 pio device monitor
-Forçar boot	     Pressionar EN na placa
-Ver chave	     Procurar por [HMAC] Chave gerada...
-Se não aparecer	Fazer upload com monitor aberto
-
-A chave apareceu! 🎉
-
-
-exemplo:
-text
-[HMAC] Chave gerada e salva na NVS:
-i/@"rU=pXm*VFor"zD^'bm^PS({\[|e6
-[HMAC] Anote esta chave! Ela não será exibida novamente.
-
-ADD_CARD D4A33F02
-=======
-location.reload();
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)

@@ -18,7 +18,7 @@ void NotificadorMQTT::begin()
     if (WiFi.status() == WL_CONNECTED)
     {
         Serial.println(F(" OK!"));
-        Serial.print(F("[MQTT] IP: "));
+        Serial.print(F("[Matt] IP: "));
         Serial.println(WiFi.localIP());
     }
     else
@@ -100,7 +100,7 @@ void NotificadorMQTT::update()
         _publicar();
     }
 
-    if (millis() - _ultimoHeartbeat > INTERVALO_HEARTBEAT_MS)
+    if (millis() - _ultimoHeartbeat > INTERVALOF_HEARTBEAT_MS)
     {
         _ultimoHeartbeat = millis();
         String hbPayload = "{\"ts\":\"" + relogio.timestampISO() +
@@ -266,13 +266,10 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
     // ============================================================
     // VALIDAÇÃO HMAC PARA COMANDOS CRÍTICOS
-<<<<<<< HEAD
-=======
     // Formatos aceitos:
     //   ARMAR|TS|SIG
     //   DESARMAR|TS|SIG
     //   RESET|TS|SIG|token
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
     // ============================================================
     if (cmd.startsWith("ARMAR") || cmd.startsWith("DESARMAR") || cmd.startsWith("RESET"))
     {
@@ -294,10 +291,7 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
         if (comando == "RESET")
         {
-<<<<<<< HEAD
-=======
             // Formato: RESET|TS|SIG|token
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
             int p3 = resto.indexOf('|');
             if (p3 == -1)
             {
@@ -314,20 +308,11 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
         }
         sig.trim();
 
-<<<<<<< HEAD
-        // CORRIGIDO: usa temHoraValida() em vez de disponivel()
-        // para aceitar também o fallback NTP.
-        uint32_t agora = 0;
-        if (relogio.temHoraValida())
-        {
-            agora = relogio.agoraUnix();
-=======
         // Obtém timestamp Unix real (RTC) ou fallback millis
         uint32_t agora = 0;
         if (relogio.disponivel())
         {
             agora = relogio.driver().now().unixtime();
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
         }
         else
         {
@@ -342,10 +327,7 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
         logSerial("INFO", "HMAC", "Comando validado: " + comando);
 
-<<<<<<< HEAD
-=======
         // Para RESET, valida o token separadamente
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
         if (comando == "RESET" && token != MQTT_RESET_TOKEN)
         {
             logSerial("WARN", "HMAC", "RESET negado: token invalido.");
@@ -353,14 +335,9 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
             return;
         }
 
-<<<<<<< HEAD
-        cmd = comando;
-    }
-=======
         cmd = comando; // Remove TS, SIG e token para o processamento normal
     }
     // ============================================================
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 
     // ============================================================
     // TÓPICO DE AMBIENTE
@@ -493,10 +470,7 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
     }
     else if (cmd == "RESET")
     {
-<<<<<<< HEAD
-=======
         // HMAC e token já foram validados no bloco acima
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
         alarme.contadorAberturasPorta = 0;
         alarme.contadorAproximacoes = 0;
         alarme.contadorAcessosValidos = 0;

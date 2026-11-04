@@ -30,7 +30,7 @@ String calcularHMAC(const String &payload, const String &chave);
  * @param ts   Timestamp Unix (segundos) recebido no payload.
  * @param sig  Assinatura HMAC recebida (hex, 64 chars).
  * @param prefs Referência ao Preferences.
- * @param agora Timestamp Unix atual (fornecido pelo chamador, ex: relogio).
+ * @param agora Timestamp Unix atual (fornecido pelo charmajor, ex: relogio).
  * @return true se válido, false caso contrário.
  */
 bool validarHMAC(const String &cmd, uint32_t ts, const String &sig, Preferences &prefs, uint32_t agora);

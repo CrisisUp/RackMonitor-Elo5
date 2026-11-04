@@ -268,14 +268,9 @@ Salvos na flash do ESP32:
 | `timeout` | 1800000 | `unsigned long` |
 | `invasoes` | 3 | `unsigned int` |
 | `modo` | 0 (ARMADO) | `uint8_t` |
-<<<<<<< HEAD
 | hmac_key | A&.U#xFX... | String |
 
 ## 🖥️ Comandos Serial (firmware v7.5)
-=======
-
-## 🖥️ Comandos Serial (firmware v7.4)
->>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 
 | Comando | Descrição |
 | :--- | :--- |
