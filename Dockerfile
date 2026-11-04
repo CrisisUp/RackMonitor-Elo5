@@ -43,6 +43,7 @@ LABEL description="Ambiente para compilar e gravar firmware ESP32 com PlatformIO
 
 # Instala dependências mínimas de runtime (apenas o essencial)
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     git \
     && rm -rf /var/lib/apt/lists/*
 

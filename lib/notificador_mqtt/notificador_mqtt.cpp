@@ -100,7 +100,8 @@ void NotificadorMQTT::update()
         _publicar();
     }
 
-    if (millis() - _ultimoHeartbeat > INTERVALOF_HEARTBEAT_MS)
+    // CORREÇÃO: INTERVALO_HEARTBEAT_MS (sem o "F")
+    if (millis() - _ultimoHeartbeat > INTERVALO_HEARTBEAT_MS)
     {
         _ultimoHeartbeat = millis();
         String hbPayload = "{\"ts\":\"" + relogio.timestampISO() +
@@ -266,10 +267,6 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
     // ============================================================
     // VALIDAÇÃO HMAC PARA COMANDOS CRÍTICOS
-    // Formatos aceitos:
-    //   ARMAR|TS|SIG
-    //   DESARMAR|TS|SIG
-    //   RESET|TS|SIG|token
     // ============================================================
     if (cmd.startsWith("ARMAR") || cmd.startsWith("DESARMAR") || cmd.startsWith("RESET"))
     {
@@ -291,7 +288,6 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
         if (comando == "RESET")
         {
-            // Formato: RESET|TS|SIG|token
             int p3 = resto.indexOf('|');
             if (p3 == -1)
             {
@@ -308,11 +304,11 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
         }
         sig.trim();
 
-        // Obtém timestamp Unix real (RTC) ou fallback millis
+        // CORREÇÃO: Usa o método correto da classe Relogio
         uint32_t agora = 0;
         if (relogio.disponivel())
         {
-            agora = relogio.driver().now().unixtime();
+            agora = relogio.agoraUnix(); // <-- ALTERADO AQUI
         }
         else
         {
@@ -327,7 +323,6 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
 
         logSerial("INFO", "HMAC", "Comando validado: " + comando);
 
-        // Para RESET, valida o token separadamente
         if (comando == "RESET" && token != MQTT_RESET_TOKEN)
         {
             logSerial("WARN", "HMAC", "RESET negado: token invalido.");
@@ -335,9 +330,8 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
             return;
         }
 
-        cmd = comando; // Remove TS, SIG e token para o processamento normal
+        cmd = comando;
     }
-    // ============================================================
 
     // ============================================================
     // TÓPICO DE AMBIENTE
@@ -470,7 +464,6 @@ void NotificadorMQTT::_tratarComando(char *topic, byte *payload, unsigned int le
     }
     else if (cmd == "RESET")
     {
-        // HMAC e token já foram validados no bloco acima
         alarme.contadorAberturasPorta = 0;
         alarme.contadorAproximacoes = 0;
         alarme.contadorAcessosValidos = 0;
