@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  # =========================================
+  # SERVIÇO 1: Rodar os testes unitários
+  # =========================================
+  test:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: pio test -e native
+    # Não precisa de acesso à porta serial
+
+  # =========================================
+  # SERVIÇO 2: Compilar o firmware (sem gravar)
+  # =========================================
+  build:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: pio run -e esp32dev
+    # Não precisa de acesso à porta serial
+
+  # =========================================
+  # SERVIÇO 3: Gravar o firmware no ESP32
+  # =========================================
+  upload:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: pio run -e esp32dev -t upload
+    devices:
+      - "${ESP32_PORT:-/dev/ttyUSB0}:/dev/ttyUSB0" # Use a variável de ambiente para a porta
+    # No macOS, a porta geralmente é /dev/cu.usbserial-0001
+
+  # =========================================
+  # SERVIÇO 4: Monitor Serial
+  # =========================================
+  monitor:
+    build: .
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: pio device monitor -e esp32dev
+    devices:
+      - "${ESP32_PORT:-/dev/ttyUSB0}:/dev/ttyUSB0"
+    stdin_open: true
+    tty: true

@@ -623,8 +623,12 @@
                 throw new Error("HMAC key not set");
             }
 
+<<<<<<< HEAD
             // CORRIGIDO: timestamp em UTC (sem subtrair fuso horário)
             const ts = Math.floor(Date.now() / 1000) - (3 * 3600);
+=======
+            const ts = Math.floor(Date.now() / 1000);
+>>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
             const payload = `${cmd}|${ts}`;
 
             const enc = new TextEncoder();

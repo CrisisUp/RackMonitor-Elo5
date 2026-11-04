@@ -1,0 +1,97 @@
+# =========================================================================
+# .dockerignore - Lista de arquivos que NÃO devem ser enviados ao Docker
+# =========================================================================
+# O Docker copia todo o contexto (a pasta atual) para dentro do container.
+# Isso pode ser lento e perigoso se você incluir arquivos desnecessários
+# ou sensíveis. O .dockerignore funciona como o .gitignore, mas para o Docker.
+
+# -------------------------------------------------------------------------
+# 1. CONTROLE DE VERSÃO (GIT)
+# -------------------------------------------------------------------------
+# O Docker não precisa do histórico do Git para compilar o projeto.
+# Isso reduz drasticamente o tamanho do contexto de build.
+.git
+.gitignore
+.gitattributes
+
+# -------------------------------------------------------------------------
+# 2. PASTAS DE BUILD DO PLATFORMIO
+# -------------------------------------------------------------------------
+# A pasta .pio/ contém binários, cache e bibliotecas baixadas. Ela pode
+# ter gigabytes. O container vai baixar e compilar tudo do zero (ou usar
+# o cache do Docker), então não precisamos enviar a versão local.
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# -------------------------------------------------------------------------
+# 3. CREDENCIAIS E CONFIGURAÇÕES SENSÍVEIS
+# -------------------------------------------------------------------------
+# O config.h real contém senhas de Wi-Fi, MQTT e OTA. Ele NUNCA deve ir
+# para a imagem Docker. O Dockerfile usará o config.example.h como base.
+include/config.h
+include/secrets.h
+secrets.h
+*.pem
+*.key
+
+# -------------------------------------------------------------------------
+# 4. ARQUIVOS DE IDE / EDITOR
+# -------------------------------------------------------------------------
+# Configurações do VS Code, IntelliJ, etc. Não afetam a compilação.
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -------------------------------------------------------------------------
+# 5. SISTEMA OPERACIONAL
+# -------------------------------------------------------------------------
+# Arquivos gerados automaticamente pelo macOS ou Windows.
+.DS_Store
+Thumbs.db
+
+# -------------------------------------------------------------------------
+# 6. LOGS E ARQUIVOS TEMPORÁRIOS
+# -------------------------------------------------------------------------
+# Logs de compilação, arquivos temporários de editores, backups.
+*.log
+*.tmp
+*.bak
+*.old
+
+# -------------------------------------------------------------------------
+# 7. ARTEFATOS DE BUILD (BINÁRIOS)
+# -------------------------------------------------------------------------
+# Binários gerados localmente. O Docker vai gerar os seus próprios.
+*.bin
+*.elf
+*.map
+*.hex
+
+# -------------------------------------------------------------------------
+# 8. PASTAS DE FERRAMENTAS EXTERNAS (OPCIONAL)
+# -------------------------------------------------------------------------
+# Se a pasta tools/ contém scripts Python que não são necessários para
+# a compilação, você pode ignorá-la. Mas se o código depende dela,
+# remova ou comente a linha abaixo.
+# tools/
+
+# -------------------------------------------------------------------------
+# 9. DOCUMENTAÇÃO
+# -------------------------------------------------------------------------
+# O Docker não precisa do README.md ou de imagens de documentação.
+# Se você quiser que a imagem final tenha a documentação, remova esta linha.
+README.md
+*.md
+docs/
+
+# -------------------------------------------------------------------------
+# 10. DOCKER
+# -------------------------------------------------------------------------
+# O Dockerfile e o .dockerignore não precisam ser copiados para dentro
+# da imagem (o Docker já os processou antes de iniciar o build).
+Dockerfile
+.dockerignore
+docker-compose.yml
+docker-compose.override.yml

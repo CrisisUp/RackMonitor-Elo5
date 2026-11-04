@@ -1,18 +1,47 @@
+<<<<<<< HEAD
 # PlatformIO (build e dependências)
+=======
+# =========================================
+# PLATFORMIO
+# =========================================
+>>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 .pio/
 .pioenvs/
 .piolibdeps/
 
+<<<<<<< HEAD
 # VS Code (configurações locais)
+=======
+# =========================================
+# CREDENCIAIS E CONFIGURAÇÕES SENSÍVEIS
+# =========================================
+# O config.h real NUNCA deve ir para o Git
+include/config.h
+include/secrets.h
+
+# =========================================
+# IDE / EDITOR
+# =========================================
+>>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# macOS
+# =========================================
+# SISTEMA OPERACIONAL
+# =========================================
 .DS_Store
+Thumbs.db
 
-# Logs e temporários
+# =========================================
+# LOGS E TEMPORÁRIOS
+# =========================================
 *.log
 *.tmp
+*.bak
 
+<<<<<<< HEAD
 # ============================================================
 # SEGREDOS (NUNCA COMMITAR)
 # ============================================================
@@ -23,3 +52,16 @@ include/secrets.h
 
 # Configurações locais (opcional)
 .markdownlint.json
+=======
+# =========================================
+# ARQUIVOS DE BUILD
+# =========================================
+*.bin
+*.elf
+*.map
+
+# =========================================
+# DOCKER
+# =========================================
+docker-compose.override.yml
+>>>>>>> dc7ebf3 (feat(docker): adiciona ambiente multi-stage para build, testes e upload do ESP32)
