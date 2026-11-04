@@ -11,7 +11,7 @@ O projeto inclui funcionalidades de alarme, leitura de sensores (RFID, PIR, LDR,
   - [🔌 Hardware Utilizado](#-hardware-utilizado)
   - [🏗️ Arquitetura do Projeto](#️-arquitetura-do-projeto)
   - [🐳 Como Compilar e Testar (Docker)](#-como-compilar-e-testar-docker)
-  - [📖 Guia completo: Para instruções detalhadas sobre Docker (incluindo solução de problemas de porta USB no macOS), consulte o README\_DOCKER.md.](#-guia-completo-para-instruções-detalhadas-sobre-docker-incluindo-solução-de-problemas-de-porta-usb-no-macos-consulte-o-readme_dockermd)
+  - [📖 Guia completo: Para instruções detalhadas sobre Docker (incluindo solução de problemas de porta USB no macOS), consulte o README\_DOCKER.md](#-guia-completo-para-instruções-detalhadas-sobre-docker-incluindo-solução-de-problemas-de-porta-usb-no-macos-consulte-o-readme_dockermd)
   - [🔌 Como Gravar no ESP32](#-como-gravar-no-esp32)
   - [🔐 Segurança e Configuração](#-segurança-e-configuração)
   - [📚 Documentação Adicional](#-documentação-adicional)
@@ -82,7 +82,7 @@ Compile o firmware:
 docker compose run --rm build
 ```
 
-## 📖 Guia completo: Para instruções detalhadas sobre Docker (incluindo solução de problemas de porta USB no macOS), consulte o README_DOCKER.md.
+## 📖 Guia completo: Para instruções detalhadas sobre Docker (incluindo solução de problemas de porta USB no macOS), consulte o README_DOCKER.md
 
 ## 🔌 Como Gravar no ESP32
 
