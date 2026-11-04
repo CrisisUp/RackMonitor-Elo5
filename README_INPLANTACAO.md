@@ -1,6 +1,6 @@
 # RackMonitor-Elo5
 
-Sistema de monitoramento e segurança para racks, desenvolvido com ESP32. 
+Sistema de monitoramento e segurança para racks, desenvolvido com ESP32.
 O projeto inclui funcionalidades de alarme, leitura de sensores (RFID, PIR, LDR, DHT, ultrassônico), notificações via MQTT e interface web local.
 
 ## 📋 Índice
